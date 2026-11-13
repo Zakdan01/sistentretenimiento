@@ -1,0 +1,15 @@
+{% set type_labels = {"movie": "Película", "series": "Serie", "anime": "Anime"} %}
+<a class="title-card" href="{{ url_for('catalog.detail', title_id=title._id) }}">
+  <div class="poster">
+    {% if title.poster_url %}
+      <img src="{{ title.poster_url }}" alt="Póster de {{ title.title }}" loading="lazy">
+    {% else %}
+      <span>{{ title.title[0] }}</span>
+    {% endif %}
+  </div>
+  <h3>{{ title.title }}</h3>
+  <p class="muted">{{ title.year }} · {{ type_labels.get(title.type, title.type) }}</p>
+  {% if title.external_rating %}
+    <p class="rating">★ {{ title.external_rating }}</p>
+  {% endif %}
+</a>

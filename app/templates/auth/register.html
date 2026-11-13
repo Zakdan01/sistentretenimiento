@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Crear cuenta{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Crear cuenta</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="/auth/register">
+    <label>Nombre
+      <input type="text" name="display_name" value="{{ form.display_name if form else '' }}" required>
+    </label>
+    <label>Email
+      <input type="email" name="email" value="{{ form.email if form else '' }}" required>
+    </label>
+    <label>Contraseña
+      <input type="password" name="password" minlength="8" required>
+    </label>
+    <button type="submit">Crear cuenta</button>
+  </form>
+  <p class="muted">¿Ya tenés cuenta? <a href="/auth/login">Ingresá</a>.</p>
+</section>
+{% endblock %}

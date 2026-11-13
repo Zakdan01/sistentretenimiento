@@ -11,8 +11,16 @@
     <a class="brand" href="/">Biblioteca</a>
     <nav>
       <a href="/search">Buscar</a>
-      <a href="/library">Mi biblioteca</a>
-      <a href="/profile">Perfil</a>
+      {% if current_user %}
+        <a href="/library">Mi biblioteca</a>
+        <a href="/profile">{{ current_user.display_name }}</a>
+        <form method="post" action="/auth/logout" class="inline">
+          <button type="submit" class="link">Salir</button>
+        </form>
+      {% else %}
+        <a href="/auth/login">Ingresar</a>
+        <a href="/auth/register">Crear cuenta</a>
+      {% endif %}
     </nav>
   </header>
   <main class="page">

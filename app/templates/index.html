@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Biblioteca{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Tu biblioteca de películas, series y anime</h1>
+  <p>Buscá un título, guardalo en tu biblioteca y seguí lo que estás viendo.</p>
+  <form class="searchbar" method="get" action="/search">
+    <input type="search" name="q" placeholder="Título, sinopsis, elenco, director o estudio">
+    <button type="submit">Buscar</button>
+  </form>
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Mejor valoradas</h2>
+    <a href="/search?sort=rating">Ver todas</a>
+  </div>
+  <div class="grid">
+    {% for title in top_rated %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Estrenos recientes</h2>
+    <a href="/search?sort=year">Ver todas</a>
+  </div>
+  <div class="grid">
+    {% for title in recent %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

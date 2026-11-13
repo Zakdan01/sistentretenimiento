@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Buscar{% endblock %}
+{% block content %}
+<h1>Buscar en el catálogo</h1>
+
+<form class="filters" method="get" action="/search">
+  <input type="search" name="q" value="{{ filters.q }}" placeholder="Título, sinopsis, elenco o director">
+
+  <select name="type">
+    <option value="">Todos los tipos</option>
+    <option value="movie" {% if filters.type == "movie" %}selected{% endif %}>Películas</option>
+    <option value="series" {% if filters.type == "series" %}selected{% endif %}>Series</option>
+    <option value="anime" {% if filters.type == "anime" %}selected{% endif %}>Anime</option>
+  </select>
+
+  <select name="genre">
+    <option value="">Todos los géneros</option>
+    {% for genre in genres %}
+      <option value="{{ genre }}" {% if filters.genre == genre %}selected{% endif %}>{{ genre }}</option>
+    {% endfor %}
+  </select>
+
+  <input type="number" name="year_from" value="{{ filters.year_from or '' }}" placeholder="Año desde" min="1900" max="2100">
+  <input type="number" name="year_to" value="{{ filters.year_to or '' }}" placeholder="Año hasta" min="1900" max="2100">
+  <input type="number" name="min_rating" value="{{ filters.min_rating or '' }}" placeholder="Nota mínima" min="0" max="10" step="0.1">
+
+  <select name="sort">
+    <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Mejor valoradas</option>
+    <option value="year" {% if filters.sort == "year" %}selected{% endif %}>Más recientes</option>
+    <option value="title" {% if filters.sort == "title" %}selected{% endif %}>Título A–Z</option>
+    <option value="relevance" {% if filters.sort == "relevance" %}selected{% endif %}>Relevancia</option>
+  </select>
+
+  <button type="submit">Filtrar</button>
+</form>
+
+<p class="muted">{{ total }} resultado{% if total != 1 %}s{% endif %}</p>
+
+{% if titles %}
+  <div class="grid">
+    {% for title in titles %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty">No encontramos títulos con esos filtros.</p>
+{% endif %}
+
+{% if previous_url or next_url %}
+  <nav class="pagination">
+    {% if previous_url %}<a href="{{ previous_url }}">← Anterior</a>{% endif %}
+    <span>Página {{ filters.page }} de {{ total_pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}">Siguiente →</a>{% endif %}
+  </nav>
+{% endif %}
+{% endblock %}

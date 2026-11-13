@@ -1,4 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, g, jsonify
+
+from app.auth.current_user import load_logged_in_user
+from app.auth.routes import bp as auth_bp
+from app.catalog.routes import bp as catalog_bp
 
 
 def create_app(config_overrides: dict | None = None) -> Flask:
@@ -9,8 +13,17 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     if config_overrides:
         app.config.update(config_overrides)
 
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(catalog_bp)
+    app.before_request(load_logged_in_user)
+
+    @app.context_processor
+    def inject_current_user():
+        return {"current_user": g.get("user")}
+
     @app.get("/health")
     def health():
         return jsonify(status="ok")
 
     return app
+

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ title.title }}{% endblock %}
+{% block content %}
+{% set type_labels = {"movie": "Película", "series": "Serie", "anime": "Anime"} %}
+{% set status_labels = {"watching": "Viendo", "watched": "Visto", "planned": "Pendiente", "dropped": "Abandonado"} %}
+
+<a class="back" href="/search">← Volver al catálogo</a>
+
+<article class="detail">
+  <div class="detail-poster">
+    {% if title.poster_url %}
+      <img src="{{ title.poster_url }}" alt="Póster de {{ title.title }}">
+    {% else %}
+      <span>{{ title.title[0] }}</span>
+    {% endif %}
+  </div>
+
+  <div class="detail-body">
+    <h1>{{ title.title }}</h1>
+    {% if title.original_title and title.original_title != title.title %}
+      <p class="muted">{{ title.original_title }}</p>
+    {% endif %}
+
+    <p class="meta">
+      {{ title.year }} · {{ type_labels.get(title.type, title.type) }}
+      {% if title.runtime_minutes %} · {{ title.runtime_minutes }} min{% endif %}
+      {% if title.episodes_total %} · {{ title.episodes_total }} episodios{% endif %}
+      {% if title.external_rating %} · ★ {{ title.external_rating }}{% endif %}
+    </p>
+
+    <p class="synopsis">{{ title.synopsis }}</p>
+
+    <div class="rating-box">
+      <div>
+        <strong>{{ ratings.average if ratings.average is not none else "—" }}</strong>
+        <span>promedio de usuarios ({{ ratings.count }})</span>
+      </div>
+      <div>
+        <strong>{{ title.external_rating if title.external_rating else "—" }}</strong>
+        <span>valoración de la fuente</span>
+      </div>
+    </div>
+
+    {% if entry %}
+      <p class="badge">En tu biblioteca: {{ status_labels.get(entry.status, entry.status) }}</p>
+    {% endif %}
+
+    <dl class="facts">
+      {% if title.directors %}
+        <dt>Dirección</dt><dd>{{ title.directors | join(", ") }}</dd>
+      {% endif %}
+      {% if title.cast %}
+        <dt>Elenco</dt><dd>{{ title.cast | join(", ") }}</dd>
+      {% endif %}
+      {% if title.studios %}
+        <dt>Estudios</dt><dd>{{ title.studios | join(", ") }}</dd>
+      {% endif %}
+      {% if title.genres %}
+        <dt>Géneros</dt><dd>{{ title.genres | join(", ") }}</dd>
+      {% endif %}
+      {% if title.awards %}
+        <dt>Premios</dt><dd>{{ title.awards | join(", ") }}</dd>
+      {% endif %}
+    </dl>
+
+    {% if title.seasons %}
+      <h2>Temporadas</h2>
+      <table class="seasons">
+        <thead><tr><th>Temporada</th><th>Episodios</th></tr></thead>
+        <tbody>
+          {% for season in title.seasons %}
+            <tr><td>{{ season.number }}</td><td>{{ season.episodes }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+</article>
+{% endblock %}
