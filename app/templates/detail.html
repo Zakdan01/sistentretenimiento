@@ -45,6 +45,52 @@
       <p class="badge">En tu biblioteca: {{ status_labels.get(entry.status, entry.status) }}</p>
     {% endif %}
 
+    {% if current_user %}
+      <section id="library" class="library-form">
+        <h2>Mi biblioteca</h2>
+        {% if form_error %}<p class="error">{{ form_error }}</p>{% endif %}
+        <form method="post" action="/library/{{ title._id }}">
+          <div class="form-row">
+            <label>Estado
+              <select name="status">
+                {% for value, label in status_labels.items() %}
+                  <option value="{{ value }}" {% if entry and entry.status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Mi nota (1–10)
+              <input type="number" name="rating" min="1" max="10" value="{{ entry.rating if entry and entry.rating else '' }}">
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="favorite" {% if entry and entry.favorite %}checked{% endif %}>
+              Me gusta
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Temporada
+              <input type="number" name="progress_season" min="1" value="{{ entry.progress.season if entry and entry.progress else '' }}">
+            </label>
+            <label>Episodio
+              <input type="number" name="progress_episode" min="1" value="{{ entry.progress.episode if entry and entry.progress else '' }}">
+            </label>
+          </div>
+          <label>Notas
+            <textarea name="notes" rows="2" maxlength="500">{{ entry.notes if entry and entry.notes else '' }}</textarea>
+          </label>
+          <button type="submit">Guardar en mi biblioteca</button>
+        </form>
+
+        {% if entry %}
+          <form method="post" action="/library/{{ title._id }}/delete" class="delete-form">
+            <button type="submit" class="link danger">Quitar de mi biblioteca</button>
+          </form>
+        {% endif %}
+      </section>
+    {% else %}
+      <p class="muted"><a href="/auth/login?next=/titles/{{ title._id }}">Ingresá</a> para guardar este título en tu biblioteca.</p>
+    {% endif %}
+
+
     <dl class="facts">
       {% if title.directors %}
         <dt>Dirección</dt><dd>{{ title.directors | join(", ") }}</dd>

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Mi biblioteca{% endblock %}
+{% block content %}
+<h1>Mi biblioteca</h1>
+
+<nav class="tabs">
+  <a href="/library" class="{% if not active_status %}active{% endif %}">Todas ({{ counts.values() | sum }})</a>
+  <a href="/library?status=watching" class="{% if active_status == 'watching' %}active{% endif %}">Viendo ({{ counts.watching }})</a>
+  <a href="/library?status=watched" class="{% if active_status == 'watched' %}active{% endif %}">Vistas ({{ counts.watched }})</a>
+  <a href="/library?status=planned" class="{% if active_status == 'planned' %}active{% endif %}">Pendientes ({{ counts.planned }})</a>
+  <a href="/library?status=dropped" class="{% if active_status == 'dropped' %}active{% endif %}">Abandonadas ({{ counts.dropped }})</a>
+</nav>
+
+{% if entries %}
+  {% set status_labels = {"watching": "Viendo", "watched": "Vista", "planned": "Pendiente", "dropped": "Abandonada"} %}
+  <div class="grid">
+    {% for entry in entries %}
+      <a class="title-card" href="/titles/{{ entry.title._id }}">
+        <div class="poster">
+          {% if entry.title.poster_url %}
+            <img src="{{ entry.title.poster_url }}" alt="Póster de {{ entry.title.title }}" loading="lazy">
+          {% else %}
+            <span>{{ entry.title.title[0] }}</span>
+          {% endif %}
+        </div>
+        <h3>{{ entry.title.title }}</h3>
+        <p class="badge">{{ status_labels.get(entry.status, entry.status) }}</p>
+        {% if entry.favorite %}<p class="rating">♥ Favorita</p>{% endif %}
+        {% if entry.rating %}<p class="muted">Mi nota: {{ entry.rating }}/10</p>{% endif %}
+        {% if entry.progress %}
+          <p class="muted">T{{ entry.progress.season }} · E{{ entry.progress.episode }}</p>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty">
+    Todavía no guardaste títulos con este estado.
+    <a href="/search">Buscá algo para agregar</a>.
+  </p>
+{% endif %}
+{% endblock %}
