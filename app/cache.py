@@ -17,6 +17,7 @@ TITLE_PREFIX = "cache:title:"
 API_PREFIX = "cache:api:"
 VIEWS_PREFIX = "cnt:views:"
 LIKES_PREFIX = "cnt:likes:"
+RECENT_PREFIX = "recent:views:"
 POPULAR_KEY = "rank:popular"
 
 SEARCH_TTL_SECONDS = 60
@@ -99,3 +100,25 @@ def popular_title_ids(redis_client, limit: int = 8) -> list[str]:
 
 def popular_with_scores(redis_client, limit: int = 8) -> list[tuple[str, float]]:
     return redis_client.zrevrange(POPULAR_KEY, 0, limit - 1, withscores=True)
+
+
+def add_recent_view(redis_client, user_id, title_id, max_items: int = 6) -> None:
+    """Registra un título en el historial reciente del usuario usando una LIST en Redis."""
+    key = f"{RECENT_PREFIX}{user_id}"
+    raw_id = str(title_id)
+    # Evita duplicados contiguos o en la lista
+    redis_client.lrem(key, 0, raw_id)
+    # Inserta al principio de la lista FIFO/LIFO
+    redis_client.lpush(key, raw_id)
+    # Mantiene un tamaño acotado
+    redis_client.ltrim(key, 0, max_items - 1)
+
+
+def get_recent_views(redis_client, user_id, limit: int = 6) -> list[str]:
+    """Obtiene los últimos títulos vistos por el usuario desde la LIST en Redis."""
+    key = f"{RECENT_PREFIX}{user_id}"
+    raw_list = redis_client.lrange(key, 0, limit - 1)
+    return [
+        item.decode("utf-8") if isinstance(item, bytes) else str(item)
+        for item in raw_list
+    ]

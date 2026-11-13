@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Administrar usuarios{% endblock %}
+{% block content %}
+<h1>Administrar usuarios</h1>
+{% include "admin/_nav.html" %}
+
+<div class="section-head">
+  <p class="muted">{{ total }} usuario{% if total != 1 %}s{% endif %}</p>
+  <a class="button" href="/admin/users/new">Agregar usuario</a>
+</div>
+
+<table class="admin-table">
+  <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Alta</th><th>Acciones</th></tr></thead>
+  <tbody>
+    {% for user in users %}
+      <tr>
+        <td>{{ user.display_name }}</td>
+        <td>{{ user.email }}</td>
+        <td><span class="badge">{{ user.role }}</span></td>
+        <td>{{ user.created_at.strftime("%Y-%m-%d") }}</td>
+        <td class="actions">
+          <a href="/admin/users/{{ user._id }}/edit">Editar</a>
+          {% if user._id != current_user._id %}
+            <form method="post" action="/admin/users/{{ user._id }}/delete" onsubmit="return confirm('¿Eliminar la cuenta de {{ user.display_name }} y su biblioteca?');">
+              <button type="submit" class="link danger">Eliminar</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if previous_url or next_url %}
+  <nav class="pagination">
+    {% if previous_url %}<a href="{{ previous_url }}">← Anterior</a>{% endif %}
+    <span>Página {{ page }} de {{ total_pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}">Siguiente →</a>{% endif %}
+  </nav>
+{% endif %}
+{% endblock %}

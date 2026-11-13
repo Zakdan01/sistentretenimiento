@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{% if user %}Editar usuario{% else %}Nuevo usuario{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if user %}Editar usuario{% else %}Nuevo usuario{% endif %}</h1>
+{% include "admin/_nav.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form class="card admin-form" method="post" action="{{ action_url }}">
+  <label>Nombre
+    <input type="text" name="display_name" maxlength="60" required value="{{ data.get('display_name') or '' }}">
+  </label>
+  <label>Email
+    <input type="email" name="email" required value="{{ data.get('email') or '' }}">
+  </label>
+  <label>Rol
+    {% set current_role = data.get('role') or "user" %}
+    <select name="role">
+      <option value="user" {% if current_role == "user" %}selected{% endif %}>Usuario común</option>
+      <option value="admin" {% if current_role == "admin" %}selected{% endif %}>Administrador</option>
+    </select>
+  </label>
+  <label>Contraseña {% if user %}(dejar vacío para conservarla){% endif %}
+    <input type="password" name="password" minlength="8" {% if not user %}required{% endif %}>
+  </label>
+
+  <div class="form-actions">
+    <button type="submit">{% if user %}Guardar cambios{% else %}Crear usuario{% endif %}</button>
+    <a class="back" href="/admin/users">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

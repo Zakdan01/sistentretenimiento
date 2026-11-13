@@ -1,73 +1,38 @@
-import subprocess
-from pathlib import Path
-
 import pytest
-from pymongo import MongoClient
 
-from app import create_app
+from app.catalog.providers import ProviderError
+from tests.support import (
+    flush_redis,
+    get_database,
+    make_app,
+    prepare_database,
+    teardown,
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-INIT_SCRIPTS = [
-    BASE_DIR / "mongodb" / "init" / "01_collections.js",
-    BASE_DIR / "mongodb" / "init" / "02_indexes.js",
-]
-MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "catalogo_test_import_routes"
-REDIS_URL = "redis://localhost:6379/15"
 
 JIKAN_DETAILS = {
     "external": {"source": "jikan", "id": 16498},
     "type": "anime",
     "title": "Shingeki no Kyojin",
-    "original_title": "進撃の巨人",
     "synopsis": "La humanidad sobrevive tras enormes murallas.",
     "genres": ["Acción", "Fantasía"],
-    "release_date": "2013-04-07",
-    "runtime_minutes": None,
-    "seasons": [{"number": 1, "episodes": 25}],
-    "episodes_total": 25,
-    "directors": [],
-    "cast": [],
-    "studios": ["Wit Studio"],
+    "year": 2013,
     "poster_url": "https://cdn.example/poster.jpg",
     "external_rating": 8.5,
-    "awards": [],
 }
 
 
 @pytest.fixture
 def app():
-    from redis import Redis
+    client, db = prepare_database(DB_NAME)
+    redis_client = flush_redis()
 
-    client = MongoClient(MONGO_URI)
-    client.drop_database(DB_NAME)
-
-    uri = f"{MONGO_URI}/{DB_NAME}"
-    for script in INIT_SCRIPTS:
-        subprocess.run(
-            ["mongosh", uri, "--quiet", "--file", str(script)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    redis_client = Redis.from_url(REDIS_URL, decode_responses=True, protocol=2)
-    redis_client.flushdb()
-
-    application = create_app(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "test-secret",
-            "MONGO_DB": DB_NAME,
-            "REDIS_URL": REDIS_URL,
-            "SESSION_TTL_SECONDS": 60,
-        }
-    )
+    application = make_app(DB_NAME)
 
     yield application
 
-    client.drop_database(DB_NAME)
-    redis_client.flushdb()
+    teardown(client, DB_NAME, redis_client)
 
 
 @pytest.fixture
@@ -75,8 +40,13 @@ def client(app):
     return app.test_client()
 
 
-def login(client):
-    return client.post(
+@pytest.fixture
+def db(app):
+    return get_database(DB_NAME)
+
+
+def register(client, role: str = "admin"):
+    res = client.post(
         "/auth/register",
         data={
             "display_name": "Ivan",
@@ -84,6 +54,12 @@ def login(client):
             "password": "secreto123",
         },
     )
+    if role != "user":
+        get_database(DB_NAME).users.update_one(
+            {"email": "ivan@example.com"},
+            {"$set": {"role": role}},
+        )
+    return res
 
 
 def test_import_page_requires_login(client):
@@ -93,8 +69,28 @@ def test_import_page_requires_login(client):
     assert "/auth/login" in response.headers["Location"]
 
 
+def test_import_page_rejects_regular_user(client):
+    register(client, role="user")
+    response = client.get("/import")
+    assert response.status_code == 403
+
+
+def test_import_page_shows_provider_error(client, monkeypatch):
+    register(client)
+
+    def fail(query, source):
+        raise ProviderError("Falta TMDB_API_KEY en el archivo .env.")
+
+    monkeypatch.setattr("app.catalog.routes._search_external", fail)
+
+    response = client.get("/import?q=inception&source=tmdb")
+
+    assert response.status_code == 200
+    assert "TMDB_API_KEY" in response.get_data(as_text=True)
+
+
 def test_import_page_shows_external_results(client, monkeypatch):
-    login(client)
+    register(client)
     monkeypatch.setattr(
         "app.catalog.routes._search_external",
         lambda query, source: [
@@ -114,8 +110,8 @@ def test_import_page_shows_external_results(client, monkeypatch):
     assert "Shingeki no Kyojin" in response.get_data(as_text=True)
 
 
-def test_import_post_creates_title(client, monkeypatch):
-    login(client)
+def test_import_post_creates_title_in_the_right_collection(client, db, monkeypatch):
+    register(client)
     monkeypatch.setattr(
         "app.catalog.routes._fetch_external",
         lambda source, external_id, media_type: JIKAN_DETAILS,
@@ -127,6 +123,23 @@ def test_import_post_creates_title(client, monkeypatch):
     )
 
     assert response.status_code == 302
-    database = MongoClient(MONGO_URI)[DB_NAME]
-    assert database.titles.count_documents({}) == 1
-    assert database.titles.find_one()["title"] == "Shingeki no Kyojin"
+    assert db.animes.count_documents({}) == 1
+    assert db.animes.find_one()["title"] == "Shingeki no Kyojin"
+    assert db.movies.count_documents({}) == 0
+
+
+def test_import_post_reports_provider_errors(client, monkeypatch):
+    register(client)
+
+    def fail(source, external_id, media_type):
+        raise ProviderError("sin conexión")
+
+    monkeypatch.setattr("app.catalog.routes._fetch_external", fail)
+
+    response = client.post(
+        "/import",
+        data={"source": "jikan", "external_id": "16498"},
+    )
+
+    assert response.status_code == 400
+    assert "sin conexión" in response.get_data(as_text=True)

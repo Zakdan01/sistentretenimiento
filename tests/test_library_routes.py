@@ -1,57 +1,29 @@
-import subprocess
-from pathlib import Path
-
 import pytest
-from pymongo import MongoClient
-from redis import Redis
 
-from app import create_app
-from mongodb.seed.load_seed import load_titles
+from tests.support import (
+    find_title,
+    flush_redis,
+    get_database,
+    make_app,
+    prepare_database,
+    seed_catalog,
+    teardown,
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-INIT_SCRIPTS = [
-    BASE_DIR / "mongodb" / "init" / "01_collections.js",
-    BASE_DIR / "mongodb" / "init" / "02_indexes.js",
-]
-SEED_PATH = BASE_DIR / "mongodb" / "seed" / "titles.json"
-MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "catalogo_test_library"
-REDIS_URL = "redis://localhost:6379/15"
 
 
 @pytest.fixture
 def app():
-    client = MongoClient(MONGO_URI)
-    client.drop_database(DB_NAME)
+    client, db = prepare_database(DB_NAME)
+    seed_catalog(db)
+    redis_client = flush_redis()
 
-    uri = f"{MONGO_URI}/{DB_NAME}"
-    for script in INIT_SCRIPTS:
-        subprocess.run(
-            ["mongosh", uri, "--quiet", "--file", str(script)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    load_titles(client[DB_NAME], SEED_PATH)
-
-    redis_client = Redis.from_url(REDIS_URL, decode_responses=True, protocol=2)
-    redis_client.flushdb()
-
-    application = create_app(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "test-secret",
-            "MONGO_DB": DB_NAME,
-            "REDIS_URL": REDIS_URL,
-            "SESSION_TTL_SECONDS": 60,
-        }
-    )
+    application = make_app(DB_NAME)
 
     yield application
 
-    client.drop_database(DB_NAME)
-    redis_client.flushdb()
+    teardown(client, DB_NAME, redis_client)
 
 
 @pytest.fixture
@@ -61,10 +33,10 @@ def client(app):
 
 @pytest.fixture
 def db(app):
-    return MongoClient(MONGO_URI)[DB_NAME]
+    return get_database(DB_NAME)
 
 
-def login(client, email="laura@example.com"):
+def register(client, email="laura@example.com"):
     return client.post(
         "/auth/register",
         data={"display_name": "Laura", "email": email, "password": "secreto123"},
@@ -72,7 +44,7 @@ def login(client, email="laura@example.com"):
 
 
 def title_id(db, title="Dark"):
-    return db.titles.find_one({"title": title})["_id"]
+    return find_title(db, title)["_id"]
 
 
 def test_library_page_requires_login(client):
@@ -82,8 +54,8 @@ def test_library_page_requires_login(client):
     assert "/auth/login" in response.headers["Location"]
 
 
-def test_add_entry_creates_document(client, db):
-    login(client)
+def test_add_entry_creates_document_with_title_type(client, db):
+    register(client)
 
     response = client.post(
         f"/library/{title_id(db)}",
@@ -95,10 +67,25 @@ def test_add_entry_creates_document(client, db):
     assert entry["status"] == "watching"
     assert entry["rating"] == 9
     assert entry["favorite"] is True
+    assert entry["title_type"] == "series"
+
+
+def test_add_entry_works_for_each_catalog_collection(client, db):
+    register(client)
+
+    for title, expected_type in (
+        ("Inception", "movie"),
+        ("Dark", "series"),
+        ("Cowboy Bebop", "anime"),
+    ):
+        client.post(f"/library/{title_id(db, title)}", data={"status": "planned"})
+
+    stored = {entry["title_type"] for entry in db.library_entries.find()}
+    assert stored == {"movie", "series", "anime"}
 
 
 def test_add_entry_rejects_invalid_rating(client, db):
-    login(client)
+    register(client)
 
     response = client.post(
         f"/library/{title_id(db)}",
@@ -110,7 +97,7 @@ def test_add_entry_rejects_invalid_rating(client, db):
 
 
 def test_update_entry_keeps_a_single_document(client, db):
-    login(client)
+    register(client)
     client.post(f"/library/{title_id(db)}", data={"status": "planned"})
 
     client.post(
@@ -126,7 +113,7 @@ def test_update_entry_keeps_a_single_document(client, db):
 
 
 def test_update_entry_clears_favorite_when_unchecked(client, db):
-    login(client)
+    register(client)
     client.post(f"/library/{title_id(db)}", data={"status": "watched", "favorite": "on"})
 
     client.post(f"/library/{title_id(db)}", data={"status": "watched"})
@@ -135,7 +122,7 @@ def test_update_entry_clears_favorite_when_unchecked(client, db):
 
 
 def test_delete_entry_removes_document(client, db):
-    login(client)
+    register(client)
     client.post(f"/library/{title_id(db)}", data={"status": "watched"})
 
     response = client.post(f"/library/{title_id(db)}/delete")
@@ -145,7 +132,7 @@ def test_delete_entry_removes_document(client, db):
 
 
 def test_library_page_lists_only_my_entries(client, db):
-    login(client)
+    register(client)
     client.post(f"/library/{title_id(db)}", data={"status": "watching"})
 
     response = client.get("/library")
@@ -156,7 +143,7 @@ def test_library_page_lists_only_my_entries(client, db):
 
 
 def test_library_page_filters_by_status(client, db):
-    login(client)
+    register(client)
     client.post(f"/library/{title_id(db)}", data={"status": "watching"})
     client.post(f"/library/{title_id(db, 'Inception')}", data={"status": "watched"})
 
@@ -168,7 +155,7 @@ def test_library_page_filters_by_status(client, db):
 
 
 def test_progress_requires_season_and_episode(client, db):
-    login(client)
+    register(client)
 
     response = client.post(
         f"/library/{title_id(db)}",
@@ -180,7 +167,7 @@ def test_progress_requires_season_and_episode(client, db):
 
 
 def test_progress_is_stored_as_nested_object(client, db):
-    login(client)
+    register(client)
 
     client.post(
         f"/library/{title_id(db)}",
@@ -188,3 +175,17 @@ def test_progress_is_stored_as_nested_object(client, db):
     )
 
     assert db.library_entries.find_one({})["progress"] == {"season": 2, "episode": 4}
+
+
+def test_entries_of_another_user_are_not_visible(client, db):
+    register(client)
+    client.post(f"/library/{title_id(db)}", data={"status": "watching"})
+    client.post("/auth/logout")
+
+    register(client, email="diego@example.com")
+
+    response = client.get("/library")
+
+    assert response.status_code == 200
+    assert db.library_entries.count_documents({}) == 1
+    assert "Dark" not in response.get_data(as_text=True)

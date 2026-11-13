@@ -14,13 +14,15 @@ from flask import (
     url_for,
 )
 
-from app.auth.current_user import login_required
+from app.auth.current_user import admin_required, login_required
 from app.cache import (
     EXTERNAL_TTL_SECONDS,
     SEARCH_TTL_SECONDS,
     TITLE_TTL_SECONDS,
+    add_recent_view,
     api_cache_key,
     get_json,
+    get_recent_views,
     invalidate_api,
     invalidate_search,
     invalidate_titles,
@@ -31,6 +33,7 @@ from app.cache import (
     search_cache_key,
     set_json,
     title_cache_key,
+    view_count,
 )
 from app.catalog.importer import import_title
 from app.catalog.providers import (
@@ -46,8 +49,11 @@ from app.catalog.services import (
     get_title,
     list_genres,
     parse_filters,
+    recent_titles,
     search_titles,
     serialize_title,
+    titles_by_ids,
+    top_rated_titles,
 )
 from app.extensions import get_mongo_db, get_redis_client
 
@@ -78,36 +84,46 @@ def _search_payload(db, params) -> dict:
 
 
 def _trending_titles(db) -> list[dict]:
-    object_ids = []
-    for raw_id in popular_title_ids(get_redis_client()):
-        try:
-            object_ids.append(ObjectId(raw_id))
-        except (InvalidId, TypeError):
-            continue
-
-    if not object_ids:
+    raw_ids = popular_title_ids(get_redis_client())
+    if not raw_ids:
         return []
 
-    documents = {
-        document["_id"]: document
-        for document in db.titles.find({"_id": {"$in": object_ids}})
-    }
-    return [documents[object_id] for object_id in object_ids if object_id in documents]
+    documents = titles_by_ids(db, raw_ids)
+    ordered = []
+    for raw_id in raw_ids:
+        try:
+            object_id = ObjectId(raw_id)
+        except (InvalidId, TypeError):
+            continue
+        document = documents.get(object_id)
+        if document is not None:
+            ordered.append(document)
+    return ordered
 
 
 @bp.get("/")
 def index():
     db = get_mongo_db()
-    top_rated = list(
-        db.titles.find().sort([("external_rating", -1), ("title", 1)]).limit(8)
-    )
-    recent = list(db.titles.find().sort([("year", -1), ("title", 1)]).limit(8))
+    recent_viewed = []
+    if g.get("user"):
+        recent_ids = get_recent_views(get_redis_client(), g.user["_id"])
+        if recent_ids:
+            docs_map = titles_by_ids(db, recent_ids)
+            for raw_id in recent_ids:
+                try:
+                    oid = ObjectId(raw_id)
+                except (InvalidId, TypeError):
+                    continue
+                doc = docs_map.get(oid)
+                if doc is not None:
+                    recent_viewed.append(doc)
 
     return render_template(
         "index.html",
-        top_rated=top_rated,
-        recent=recent,
+        top_rated=top_rated_titles(db),
+        recent=recent_titles(db),
         trending=_trending_titles(db),
+        recent_viewed=recent_viewed,
     )
 
 
@@ -144,10 +160,11 @@ def detail(title_id):
     if document is None:
         abort(404)
 
-    register_view(get_redis_client(), document["_id"])
+    views = register_view(get_redis_client(), document["_id"])
 
     entry = None
     if g.get("user"):
+        add_recent_view(get_redis_client(), g.user["_id"], document["_id"])
         entry = db.library_entries.find_one(
             {"user_id": g.user["_id"], "title_id": document["_id"]}
         )
@@ -158,6 +175,7 @@ def detail(title_id):
         ratings=average_rating(db, document["_id"]),
         entry=entry,
         likes=like_count(get_redis_client(), document["_id"]),
+        views=views,
     )
 
 
@@ -201,10 +219,7 @@ def api_popular():
         object_ids.append(object_id)
         scores[object_id] = int(score)
 
-    documents = {
-        document["_id"]: document
-        for document in db.titles.find({"_id": {"$in": object_ids}})
-    }
+    documents = titles_by_ids(db, object_ids)
 
     results = []
     for object_id in object_ids:
@@ -254,7 +269,7 @@ def _fetch_external(source: str, external_id: str, media_type: str) -> dict:
 
 
 @bp.get("/import")
-@login_required
+@admin_required
 def import_search():
     query = request.args.get("q", "").strip()
     source = request.args.get("source", "jikan")
@@ -279,7 +294,7 @@ def import_search():
 
 
 @bp.post("/import")
-@login_required
+@admin_required
 def import_create():
     source = request.form.get("source", "jikan")
     external_id = request.form.get("external_id", "")

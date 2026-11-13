@@ -1,11 +1,6 @@
-import subprocess
-from pathlib import Path
-
 import pytest
-from pymongo import MongoClient
 from redis import Redis
 
-from app import create_app
 from app.cache import (
     POPULAR_KEY,
     like_count,
@@ -13,52 +8,31 @@ from app.cache import (
     title_cache_key,
     view_count,
 )
-from mongodb.seed.load_seed import load_titles
+from tests.support import (
+    REDIS_URL,
+    find_title,
+    flush_redis,
+    get_database,
+    make_app,
+    prepare_database,
+    seed_catalog,
+    teardown,
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-INIT_SCRIPTS = [
-    BASE_DIR / "mongodb" / "init" / "01_collections.js",
-    BASE_DIR / "mongodb" / "init" / "02_indexes.js",
-]
-SEED_PATH = BASE_DIR / "mongodb" / "seed" / "titles.json"
-MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "catalogo_test_cache"
-REDIS_URL = "redis://localhost:6379/15"
 
 
 @pytest.fixture
 def app():
-    client = MongoClient(MONGO_URI)
-    client.drop_database(DB_NAME)
+    client, db = prepare_database(DB_NAME)
+    seed_catalog(db)
+    redis_client = flush_redis()
 
-    uri = f"{MONGO_URI}/{DB_NAME}"
-    for script in INIT_SCRIPTS:
-        subprocess.run(
-            ["mongosh", uri, "--quiet", "--file", str(script)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    load_titles(client[DB_NAME], SEED_PATH)
-
-    redis_client = Redis.from_url(REDIS_URL, decode_responses=True, protocol=2)
-    redis_client.flushdb()
-
-    application = create_app(
-        {
-            "TESTING": True,
-            "SECRET_KEY": "test-secret",
-            "MONGO_DB": DB_NAME,
-            "REDIS_URL": REDIS_URL,
-            "SESSION_TTL_SECONDS": 60,
-        }
-    )
+    application = make_app(DB_NAME)
 
     yield application
 
-    client.drop_database(DB_NAME)
-    redis_client.flushdb()
+    teardown(client, DB_NAME, redis_client)
 
 
 @pytest.fixture
@@ -73,18 +47,13 @@ def redis_client(app):
 
 @pytest.fixture
 def dark_id(app):
-    db = MongoClient(MONGO_URI)[DB_NAME]
-    return db.titles.find_one({"title": "Dark"})["_id"]
+    return find_title(get_database(DB_NAME), "Dark")["_id"]
 
 
-def login(client):
+def register(client, email="ivan@example.com"):
     return client.post(
         "/auth/register",
-        data={
-            "display_name": "Ivan",
-            "email": "ivan@example.com",
-            "password": "secreto123",
-        },
+        data={"display_name": "Ivan", "email": email, "password": "secreto123"},
     )
 
 
@@ -122,7 +91,7 @@ def test_home_page_shows_trending_from_redis(client, redis_client, dark_id):
 
 
 def test_favorite_syncs_likes_counter(client, redis_client, dark_id):
-    login(client)
+    register(client)
 
     client.post(f"/library/{dark_id}", data={"status": "watched", "favorite": "on"})
     assert like_count(redis_client, dark_id) == 1
@@ -147,7 +116,7 @@ def test_external_search_is_cached(client, redis_client, monkeypatch):
         ]
 
     monkeypatch.setattr("app.catalog.routes._search_external_uncached", fake_search)
-    login(client)
+    register(client)
 
     client.get("/import?q=attack&source=jikan")
     client.get("/import?q=attack&source=jikan")

@@ -6,10 +6,13 @@
     {% else %}
       <span>{{ title.title[0] }}</span>
     {% endif %}
+    <span class="type-badge {{ title.type }}">{{ type_labels.get(title.type, title.type) }}</span>
+    {% if title.external_rating %}
+      <span class="rating-badge">★ {{ title.external_rating }}</span>
+    {% endif %}
   </div>
-  <h3>{{ title.title }}</h3>
-  <p class="muted">{{ title.year }} · {{ type_labels.get(title.type, title.type) }}</p>
-  {% if title.external_rating %}
-    <p class="rating">★ {{ title.external_rating }}</p>
-  {% endif %}
+  <div class="card-info">
+    <h3 title="{{ title.title }}">{{ title.title }}</h3>
+    <p class="muted">{{ title.year or "s/f" }}</p>
+  </div>
 </a>

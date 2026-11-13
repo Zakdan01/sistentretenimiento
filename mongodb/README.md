@@ -1,14 +1,18 @@
 # MongoDB en la biblioteca virtual
 
 MongoDB es la fuente de verdad del sistema. Guarda usuarios, el catálogo local
-(copia de los títulos importados desde Jikan/TMDB) y las entradas de biblioteca
-de cada usuario.
+(copia de los títulos generados desde Wikipedia/Wikidata/IMDb e importados desde
+Jikan/TMDB) y las entradas de biblioteca de cada usuario.
 
 ## Colecciones
 
+La base `catalogo` tiene exactamente cinco colecciones: `users`, `movies`,
+`series`, `animes` y `library_entries`.
+
 ### `users`
 
-Un documento por cuenta. El email es único mediante índice.
+Un documento por cuenta. El email es único mediante índice; `role` distingue al
+administrador del usuario común.
 
 | Campo | Tipo | Notas |
 | --- | --- | --- |
@@ -16,41 +20,43 @@ Un documento por cuenta. El email es único mediante índice.
 | `email` | string | único, normalizado a minúsculas |
 | `password_hash` | string | PBKDF2 de Werkzeug |
 | `display_name` | string | 1–60 caracteres |
+| `role` | enum | `admin` o `user` |
 | `avatar_url` | string o null | reservado para la interfaz |
 | `created_at` | date | alta |
 
-### `titles`
+### `movies`, `series` y `animes`
 
-Catálogo polimórfico: `type` es `movie`, `series` o `anime`. Los campos de
-temporadas y episodios se embeben porque se consultan junto con la ficha y no
-crecen sin límite (una serie tiene decenas de temporadas como máximo).
+Las tres comparten la misma forma; cada colección acepta un solo `type`. Se
+separaron para que los validadores sean estrictos (una película no puede quedar
+en `series`) y para que los índices de texto y de facetas sean homogéneos.
 
 | Campo | Tipo | Notas |
 | --- | --- | --- |
-| `external` | objeto | `{source: "tmdb"|"jikan", id}` único compuesto |
-| `type` | enum | `movie`, `series`, `anime` |
-| `title`, `original_title` | string | búsqueda con pesos |
+| `_id` | ObjectId | identidad |
+| `external` | objeto o null | `{source: "imdb"|"tmdb"|"jikan"|"anilist"|"manual", id}` único por colección |
+| `type` | enum | `movie`, `series` o `anime`, fijo por colección |
+| `title` | string | búsqueda con peso alto |
 | `synopsis` | string | texto libre |
+| `year` | int o null | 1900–2100 |
 | `genres` | array de string | facetas |
-| `release_date`, `year` | date, int | filtros por año |
-| `runtime_minutes` | int o null | películas |
-| `seasons` | array de `{number, episodes, air_date?}` | series y anime |
-| `episodes_total` | int o null | series y anime |
-| `directors`, `cast`, `studios` | arrays de string | búsqueda y ficha |
 | `poster_url` | string o null | imagen remota |
-| `external_rating` | double o null | valoración de la fuente |
-| `awards` | array de string | ficha |
+| `external_rating` | double o null | nota de la fuente (0–10) |
 | `created_at`, `updated_at` | date | auditoría |
+
+Los títulos cargados a mano desde el panel tienen `external: null`; el resto se
+identifica por `external.source + external.id`.
 
 ### `library_entries`
 
 Relación entre usuario y título con estado, favorito, nota y progreso. Se
 referencia el título (`title_id`) en lugar de copiarlo: el catálogo cambia con
-las importaciones y no debe duplicarse por usuario.
+las importaciones y no debe duplicarse por usuario. `title_type` indica en qué
+colección vive el título y evita recorrer las tres al resolver la ficha.
 
 | Campo | Tipo | Notas |
 | --- | --- | --- |
 | `user_id`, `title_id` | ObjectId | índice único compuesto |
+| `title_type` | enum | `movie`, `series` o `anime` |
 | `status` | enum | `watching`, `watched`, `planned`, `dropped` |
 | `favorite` | bool | “me gusta” |
 | `rating` | int o null | 1–10 |
@@ -60,32 +66,81 @@ las importaciones y no debe duplicarse por usuario.
 
 ## Índices
 
-Definidos en `mongodb/init/02_indexes.js`, idempotente.
+Definidos en `mongodb/init/02_indexes.js`, idempotente. Los índices de catálogo
+se repiten en `movies`, `series` y `animes`.
 
 | Colección | Índice | Uso |
 | --- | --- | --- |
-| `titles` | `text_busqueda` (texto español, pesos) | búsqueda libre |
-| `titles` | `tipo_anio` (`type`, `year` desc) | facetas y orden |
-| `titles` | `tipo_genero` (`type`, `genres`) | filtro por género |
-| `titles` | `anio` (`year` desc) | orden por año |
-| `titles` | `valoracion_externa` (`external_rating` desc) | orden por nota |
-| `titles` | `uq_fuente_externa` (`external.source`, `external.id`) único | idempotencia de importación |
+| catálogo | `text_busqueda` (texto español, pesos 10/3/1) | búsqueda libre |
+| catálogo | `anio` (`year` desc) | orden por año |
+| catálogo | `genero_anio` (`genres`, `year` desc) | filtro por género |
+| catálogo | `valoracion_externa` (`external_rating` desc) | orden por nota |
+| catálogo | `uq_fuente_externa` (`external.source`, `external.id`) único parcial | idempotencia de importación |
 | `users` | `uq_email` único | login y alta |
+| `users` | `rol` | listados y métricas del panel |
 | `library_entries` | `uq_usuario_titulo` único | un estado por usuario/título |
 | `library_entries` | `usuario_estado` | listado por estado |
 | `library_entries` | `titulo_estado` | estadísticas por título |
 | `library_entries` | `usuario_favoritos` (parcial `favorite: true`) | favoritos |
+| `library_entries` | `tipo_titulo` | resolución por colección |
+
+El índice único de identidad externa es **parcial** (`external` de tipo objeto):
+los títulos manuales con `external: null` no participan y pueden convivir.
 
 ## Puesta en marcha
 
 ```powershell
 mongosh "mongodb://localhost:27017/catalogo" --quiet --file mongodb/init/01_collections.js
 mongosh "mongodb://localhost:27017/catalogo" --quiet --file mongodb/init/02_indexes.js
-python -m mongodb.seed.load_seed
+
+# Solo si venís de la versión con la colección `titles`
+mongosh "mongodb://localhost:27017/catalogo" --quiet --file mongodb/init/03_drop_legacy.js
+
+python -m mongodb.seed.load_seed --reset
 ```
 
-El seed carga 16 títulos (4 películas, 5 series, 7 anime) y es idempotente:
-usa `update_one(upsert)` por `external.source + external.id`.
+`--reset` borra catálogo, usuarios y bibliotecas antes de cargar. Sin `--reset`
+el seed es idempotente: usa `update_one(upsert)` por `external.source +
+external.id` (catálogo), email (usuarios) y `user_id + title_id` (bibliotecas).
+
+### Datos del seed
+
+```text
+mongodb/seed/
+├─ fetch_catalog.py     # genera data/{movies,series,animes}.json desde Wikipedia/Wikidata/IMDb
+├─ build_demo.py        # genera data/libraries.json a partir del catálogo
+├─ load_seed.py         # carga catálogo, usuarios y bibliotecas en MongoDB
+└─ data/
+   ├─ movies.json
+   ├─ series.json
+   ├─ animes.json
+   ├─ users.json        # 1 admin + 2 usuarios demo
+   └─ libraries.json    # bibliotecas de ejemplo
+```
+
+Los JSON de catálogo solo contienen `source`, `external_id`, `title`, `image`,
+`synopsis`, `year`, `genres` y `rating`; el esquema de MongoDB lo completa el
+loader.
+
+Cuentas demo (`data/users.json`):
+
+| Email | Contraseña | Rol |
+| --- | --- | --- |
+| `admin@biblioteca.local` | `Admin12345` | admin |
+| `laura@biblioteca.local` | `Laura12345` | user |
+| `diego@biblioteca.local` | `Diego12345` | user |
+
+### Regenerar el catálogo (requiere red)
+
+```powershell
+python -m mongodb.seed.fetch_catalog --limit 500 --candidates 1500 --years 1990-2025
+python -m mongodb.seed.build_demo
+```
+
+El generador consulta categorías de Wikipedia en español por año, enriquece con
+Wikidata (`P345`, `P136`, `P577`), completa pósters desde la Wikipedia inglesa
+y toma las notas de `title.ratings.tsv.gz` de IMDb. Reintenta ante 429 y respeta
+`Retry-After`.
 
 ## Importación desde APIs
 
@@ -95,7 +150,8 @@ python -m mongodb.seed.import_external tmdb 27205 --media-type movie
 ```
 
 TMDB requiere `TMDB_API_KEY` en `.env`. Jikan no requiere clave, pero limita a
-3 pedidos por segundo.
+3 pedidos por segundo. La importación es idempotente y elige la colección según
+el `type` del payload.
 
 ## Agregaciones del informe
 
@@ -105,7 +161,7 @@ En `mongodb/aggregations/`:
 | --- | --- |
 | `01_top_genres.js` | géneros por cantidad y nota media |
 | `02_library_by_status.js` | actividad por usuario y estado |
-| `03_catalog_health.js` | volumen, nota media y episodios por tipo |
+| `03_catalog_health.js` | volumen, nota media e imágenes por tipo |
 | `04_user_activity.js` | usuarios más activos, favoritos y nota media |
 | `05_top_rated_by_type.js` | top 3 por tipo con `$setWindowFields` |
 
@@ -118,16 +174,19 @@ mongosh "mongodb://localhost:27017/catalogo" --quiet --file mongodb/queries/sizi
 
 `report_queries.js` imprime `stage`, `nReturned`, `totalKeysExamined`,
 `totalDocsExamined` y `executionTimeMillis` de las consultas principales.
-`nReturned == totalKeysExamined == totalDocsExamined` indica que el índice
-cubrió la selectividad sin examinar documentos de más.
+`sizing.js` recorre todas las colecciones y reporta documentos, tamaño medio,
+almacenamiento e índices.
 
 ## Decisiones de modelado
 
-- **Embedding** de temporadas y elenco dentro de `titles`: se leen siempre con
-  la ficha, tienen tamaño acotado y no se actualizan por separado.
-- **Referencias** desde `library_entries` a `users` y `titles`: la biblioteca
-  es una relación N:M y el título es una entidad con vida propia.
-- **Unicidad** de `external.source + external.id` para que la importación sea
-  idempotente y para que un título no se duplique entre ejecuciones.
-- **Validadores JSON Schema** en las tres colecciones; `additionalProperties:
-  false` en `titles` y `library_entries` obliga a declarar cada campo nuevo.
+- **Una colección por tipo** (`movies`, `series`, `animes`): validadores
+  estrictos, documentos homogéneos e índices equivalentes en las tres.
+- **Referencias** desde `library_entries` a `users` y a la colección del
+  título: la biblioteca es una relación N:M y el título es una entidad con vida
+  propia.
+- **`title_type` desnormalizado** en la entrada para resolver la ficha con un
+  `find_one` en la colección correcta.
+- **Unicidad** de `external.source + external.id` por colección para que la
+  importación sea idempotente.
+- **Validadores JSON Schema** en las cinco colecciones; `additionalProperties:
+  false` obliga a declarar cada campo nuevo.

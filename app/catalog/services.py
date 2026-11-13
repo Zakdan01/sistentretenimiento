@@ -4,7 +4,12 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 PAGE_SIZE = 12
-TYPES = {"movie", "series", "anime"}
+TYPES = ("movie", "series", "anime")
+TYPE_COLLECTIONS = {
+    "movie": "movies",
+    "series": "series",
+    "anime": "animes",
+}
 SORTS = {"relevance", "rating", "year", "title"}
 
 
@@ -20,6 +25,17 @@ def _to_float(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def title_collection(db, title_type: str):
+    """Devuelve la colección concreta de un tipo de título."""
+    return db[TYPE_COLLECTIONS[title_type]]
+
+
+def title_collections(db, title_type: str | None = None):
+    """Pares (tipo, colección) a consultar; todos si no se filtra."""
+    types = (title_type,) if title_type in TYPE_COLLECTIONS else TYPES
+    return [(item, db[TYPE_COLLECTIONS[item]]) for item in types]
 
 
 def parse_filters(params: Mapping) -> dict:
@@ -44,8 +60,6 @@ def build_filter(filters: dict) -> dict:
 
     if filters["q"]:
         query["$text"] = {"$search": filters["q"]}
-    if filters["type"]:
-        query["type"] = filters["type"]
     if filters["genre"]:
         query["genres"] = filters["genre"]
     if filters["year_from"] or filters["year_to"]:
@@ -61,41 +75,126 @@ def build_filter(filters: dict) -> dict:
     return query
 
 
-def _cursor_sorted(collection, query: dict, filters: dict, page_size: int):
-    skip = (filters["page"] - 1) * page_size
+def _matching_titles(db, filters: dict) -> list[tuple[float | None, dict]]:
+    """Consulta las colecciones necesarias y devuelve (score, documento)."""
+    query = build_filter(filters)
+    matching: list[tuple[float | None, dict]] = []
 
-    if filters["q"] and filters["sort"] == "relevance":
-        projection = {"score": {"$meta": "textScore"}}
-        return collection.find(query, projection).sort(
-            [("score", {"$meta": "textScore"})]
-        ).skip(skip).limit(page_size)
+    for _title_type, collection in title_collections(db, filters["type"]):
+        if filters["q"] and filters["sort"] == "relevance":
+            cursor = collection.find(query, {"score": {"$meta": "textScore"}})
+            for document in cursor:
+                matching.append((document.get("score"), document))
+        else:
+            for document in collection.find(query):
+                matching.append((None, document))
 
-    sort = {
-        "rating": [("external_rating", -1), ("title", 1)],
-        "year": [("year", -1), ("title", 1)],
-        "title": [("title", 1)],
-    }.get(filters["sort"], [("external_rating", -1), ("title", 1)])
+    return matching
 
-    return collection.find(query).sort(sort).skip(skip).limit(page_size)
+
+def _sort_matching(matching, sort: str):
+    if sort == "relevance":
+        return sorted(
+            matching,
+            key=lambda item: (-(item[0] or 0), item[1].get("title", "").casefold()),
+        )
+
+    if sort == "year":
+        return sorted(
+            matching,
+            key=lambda item: (
+                item[1].get("year") is None,
+                -(item[1].get("year") or 0),
+                item[1].get("title", "").casefold(),
+            ),
+        )
+
+    if sort == "title":
+        return sorted(matching, key=lambda item: item[1].get("title", "").casefold())
+
+    return sorted(
+        matching,
+        key=lambda item: (
+            item[1].get("external_rating") is None,
+            -(item[1].get("external_rating") or 0),
+            item[1].get("title", "").casefold(),
+        ),
+    )
 
 
 def search_titles(db, params: Mapping, page_size: int = PAGE_SIZE):
+    """Busca en las tres colecciones y pagina el resultado combinado."""
     filters = parse_filters(params)
-    query = build_filter(filters)
+    matching = _sort_matching(_matching_titles(db, filters), filters["sort"])
 
-    total = db.titles.count_documents(query)
-    documents = list(_cursor_sorted(db.titles, query, filters, page_size))
-
+    total = len(matching)
+    start = (filters["page"] - 1) * page_size
+    documents = [document for _score, document in matching[start : start + page_size]]
     return documents, total
 
 
-def get_title(db, title_id) -> dict | None:
+def get_title(db, title_id, title_type: str | None = None) -> dict | None:
+    """Busca una ficha por id; si no se conoce el tipo, recorre las tres."""
     try:
         object_id = ObjectId(str(title_id))
     except (InvalidId, TypeError):
         return None
 
-    return db.titles.find_one({"_id": object_id})
+    for _title_type, collection in title_collections(db, title_type):
+        document = collection.find_one({"_id": object_id})
+        if document is not None:
+            return document
+    return None
+
+
+def titles_by_ids(db, title_ids) -> dict:
+    """Resuelve ids de las tres colecciones en un solo mapa."""
+    object_ids = []
+    for raw_id in title_ids:
+        try:
+            object_ids.append(ObjectId(str(raw_id)))
+        except (InvalidId, TypeError):
+            continue
+    if not object_ids:
+        return {}
+
+    documents = {}
+    for _title_type, collection in title_collections(db):
+        for document in collection.find({"_id": {"$in": object_ids}}):
+            documents[document["_id"]] = document
+    return documents
+
+
+def top_rated_titles(db, limit: int = 8) -> list[dict]:
+    documents = [
+        document
+        for _title_type, collection in title_collections(db)
+        for document in collection.find()
+    ]
+    documents.sort(
+        key=lambda document: (
+            document.get("external_rating") is None,
+            -(document.get("external_rating") or 0),
+            document.get("title", "").casefold(),
+        )
+    )
+    return documents[:limit]
+
+
+def recent_titles(db, limit: int = 8) -> list[dict]:
+    documents = [
+        document
+        for _title_type, collection in title_collections(db)
+        for document in collection.find()
+    ]
+    documents.sort(
+        key=lambda document: (
+            document.get("year") is None,
+            -(document.get("year") or 0),
+            document.get("title", "").casefold(),
+        )
+    )
+    return documents[:limit]
 
 
 def average_rating(db, title_id) -> dict:
@@ -118,7 +217,10 @@ def average_rating(db, title_id) -> dict:
 
 
 def list_genres(db) -> list[str]:
-    return sorted(genre for genre in db.titles.distinct("genres") if genre)
+    genres = set()
+    for _title_type, collection in title_collections(db):
+        genres.update(genre for genre in collection.distinct("genres") if genre)
+    return sorted(genres)
 
 
 def serialize_title(document: dict) -> dict:
@@ -126,29 +228,9 @@ def serialize_title(document: dict) -> dict:
         "id": str(document["_id"]),
         "type": document["type"],
         "title": document["title"],
-        "original_title": document.get("original_title"),
-        "synopsis": document.get("synopsis"),
+        "synopsis": document.get("synopsis") or "",
         "genres": document.get("genres", []),
-        "release_date": document["release_date"].date().isoformat(),
-        "year": document["year"],
-        "runtime_minutes": document.get("runtime_minutes"),
-        "seasons": [
-            {
-                "number": season["number"],
-                "episodes": season["episodes"],
-                **(
-                    {"air_date": season["air_date"].date().isoformat()}
-                    if season.get("air_date")
-                    else {}
-                ),
-            }
-            for season in document.get("seasons", [])
-        ],
-        "episodes_total": document.get("episodes_total"),
-        "directors": document.get("directors", []),
-        "cast": document.get("cast", []),
-        "studios": document.get("studios", []),
+        "year": document.get("year"),
         "poster_url": document.get("poster_url"),
         "external_rating": document.get("external_rating"),
-        "awards": document.get("awards", []),
     }

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{% if title %}Editar título{% else %}Nuevo título{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if title %}Editar título{% else %}Nuevo título{% endif %}</h1>
+{% include "admin/_nav.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+{% set current_type = data.get("type") or "movie" %}
+<form class="card admin-form" method="post" action="{{ action_url }}">
+  <div class="form-row">
+    <label>Tipo
+      <select name="type" {% if title %}disabled{% endif %}>
+        {% for value, collection in title_types.items() %}
+          <option value="{{ value }}" {% if current_type == value %}selected{% endif %}>{{ {"movie": "Película", "series": "Serie", "anime": "Anime"}.get(value, value) }}</option>
+        {% endfor %}
+      </select>
+      {% if title %}<input type="hidden" name="type" value="{{ title.type }}">{% endif %}
+    </label>
+    <label>Año
+      <input type="number" name="year" min="1900" max="2100" value="{{ data.get('year') or '' }}">
+    </label>
+    <label>Valoración (0–10)
+      <input type="number" name="external_rating" min="0" max="10" step="0.1" value="{{ data.get('external_rating') if data.get('external_rating') is not none else '' }}">
+    </label>
+  </div>
+
+  <label>Título
+    <input type="text" name="title" maxlength="300" required value="{{ data.get('title') or '' }}">
+  </label>
+
+  <label>Sinopsis
+    <textarea name="synopsis" rows="4" maxlength="5000">{{ data.get('synopsis') or '' }}</textarea>
+  </label>
+
+  <label>Géneros (separados por coma)
+    <input type="text" name="genres" value="{{ data.get('genres') or '' }}" list="genre-options" placeholder="Drama, Acción">
+    <datalist id="genre-options">
+      {% for genre in genres %}<option value="{{ genre }}">{% endfor %}
+    </datalist>
+  </label>
+
+  <label>URL de la imagen
+    <input type="url" name="poster_url" value="{{ data.get('poster_url') or '' }}" placeholder="https://...">
+  </label>
+
+  <div class="form-row">
+    <label>Fuente
+      <select name="source">
+        {% set current_source = data.get('source') or "manual" %}
+        {% for source in ["manual", "imdb", "tmdb", "jikan", "anilist"] %}
+          <option value="{{ source }}" {% if current_source == source %}selected{% endif %}>{{ source }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Id externo
+      <input type="text" name="external_id" value="{{ data.get('external_id') or '' }}" placeholder="tt0133093, 603, 16498…">
+    </label>
+  </div>
+  <p class="muted">Con fuente «manual» el título no usa identidad externa.</p>
+
+  <div class="form-actions">
+    <button type="submit">{% if title %}Guardar cambios{% else %}Crear título{% endif %}</button>
+    <a class="back" href="/admin/titles">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

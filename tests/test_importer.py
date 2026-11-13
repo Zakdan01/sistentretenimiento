@@ -1,56 +1,29 @@
-import subprocess
-from pathlib import Path
-
 import pytest
-from pymongo import MongoClient
 
 from app.catalog.importer import import_title
+from tests.support import prepare_database, teardown
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-INIT_SCRIPTS = [
-    BASE_DIR / "mongodb" / "init" / "01_collections.js",
-    BASE_DIR / "mongodb" / "init" / "02_indexes.js",
-]
-MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "catalogo_test_import"
 
 JIKAN_DETAILS = {
     "external": {"source": "jikan", "id": 16498},
     "type": "anime",
     "title": "Shingeki no Kyojin",
-    "original_title": "進撃の巨人",
     "synopsis": "La humanidad sobrevive tras enormes murallas.",
     "genres": ["Acción", "Fantasía"],
-    "release_date": "2013-04-07",
-    "runtime_minutes": None,
-    "seasons": [{"number": 1, "episodes": 25}],
-    "episodes_total": 25,
-    "directors": [],
-    "cast": [],
-    "studios": ["Wit Studio"],
+    "year": 2013,
     "poster_url": "https://cdn.example/poster.jpg",
     "external_rating": 8.5,
-    "awards": [],
 }
 
 
 @pytest.fixture
 def db():
-    client = MongoClient(MONGO_URI)
-    client.drop_database(DB_NAME)
+    client, database = prepare_database(DB_NAME)
 
-    uri = f"{MONGO_URI}/{DB_NAME}"
-    for script in INIT_SCRIPTS:
-        subprocess.run(
-            ["mongosh", uri, "--quiet", "--file", str(script)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    yield database
 
-    yield client[DB_NAME]
-
-    client.drop_database(DB_NAME)
+    teardown(client, DB_NAME)
 
 
 def test_import_title_inserts_document(db):
@@ -59,7 +32,9 @@ def test_import_title_inserts_document(db):
     assert created is True
     assert document["year"] == 2013
     assert document["type"] == "anime"
-    assert db.titles.count_documents({}) == 1
+    assert document["external"] == {"source": "jikan", "id": 16498}
+    assert db.animes.count_documents({}) == 1
+    assert db.movies.count_documents({}) == 0
 
 
 def test_import_title_updates_instead_of_duplicating(db):
@@ -70,5 +45,35 @@ def test_import_title_updates_instead_of_duplicating(db):
     )
 
     assert created is False
-    assert db.titles.count_documents({}) == 1
+    assert db.animes.count_documents({}) == 1
     assert document["title"] == "Shingeki no Kyojin (título actualizado)"
+
+
+def test_import_title_keeps_string_external_ids(db):
+    details = {
+        "external": {"source": "imdb", "id": "tt1375666"},
+        "type": "movie",
+        "title": "Inception",
+        "synopsis": "Dom Cobb roba secretos dentro de los sueños.",
+        "genres": ["Ciencia ficción"],
+        "year": 2010,
+        "poster_url": None,
+        "external_rating": 8.8,
+    }
+
+    document, created = import_title(db, details)
+
+    assert created is True
+    assert document["external"] == {"source": "imdb", "id": "tt1375666"}
+    assert db.movies.count_documents({}) == 1
+
+
+def test_import_title_converts_numeric_strings_to_int(db):
+    details = {
+        **JIKAN_DETAILS,
+        "external": {"source": "jikan", "id": "16498"},
+    }
+
+    document, _created = import_title(db, details)
+
+    assert document["external"]["id"] == 16498

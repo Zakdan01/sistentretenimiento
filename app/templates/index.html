@@ -1,20 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Biblioteca{% endblock %}
+{% block title %}Biblioteca — Películas, Series y Anime{% endblock %}
 {% block content %}
 <section class="hero">
   <h1>Tu biblioteca de películas, series y anime</h1>
-  <p>Buscá un título, guardalo en tu biblioteca y seguí lo que estás viendo.</p>
+  <p>Explora el catálogo, guarda lo que estás viendo y gestiona tu colección en tiempo real.</p>
   <form class="searchbar" method="get" action="/search">
-    <input type="search" name="q" placeholder="Título, sinopsis, elenco, director o estudio">
+    <input type="search" name="q" placeholder="Buscar por título, sinopsis o género...">
     <button type="submit">Buscar</button>
   </form>
 </section>
 
-{% if trending %}
-<section>
+{% if recent_viewed %}
+<section class="home-section">
   <div class="section-head">
-    <h2>Tendencias</h2>
-    <span class="muted">según las visitas registradas en Redis</span>
+    <div class="head-title">
+      <h2>Continuar explorando</h2>
+      <span class="redis-badge">⚡ Historial reciente (Redis LIST)</span>
+    </div>
+  </div>
+  <div class="grid">
+    {% for title in recent_viewed %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if trending %}
+<section class="home-section">
+  <div class="section-head">
+    <div class="head-title">
+      <h2>Tendencias</h2>
+      <span class="redis-badge">🔥 Ranking de visitas en vivo (Redis ZSET)</span>
+    </div>
   </div>
   <div class="grid">
     {% for title in trending %}
@@ -24,10 +42,13 @@
 </section>
 {% endif %}
 
-<section>
+<section class="home-section">
   <div class="section-head">
-    <h2>Mejor valoradas</h2>
-    <a href="/search?sort=rating">Ver todas</a>
+    <div class="head-title">
+      <h2>Mejor valoradas</h2>
+      <span class="muted">Según calificaciones de IMDb y usuarios</span>
+    </div>
+    <a href="/search?sort=rating" class="btn-more">Ver todas →</a>
   </div>
   <div class="grid">
     {% for title in top_rated %}
@@ -36,10 +57,13 @@
   </div>
 </section>
 
-<section>
+<section class="home-section">
   <div class="section-head">
-    <h2>Estrenos recientes</h2>
-    <a href="/search?sort=year">Ver todas</a>
+    <div class="head-title">
+      <h2>Estrenos recientes</h2>
+      <span class="muted">Los últimos lanzamientos incorporados</span>
+    </div>
+    <a href="/search?sort=year" class="btn-more">Ver todas →</a>
   </div>
   <div class="grid">
     {% for title in recent %}

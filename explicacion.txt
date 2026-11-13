@@ -1,0 +1,95 @@
+Aquí te explico detalladamente cómo y dónde se aplica cada tecnología:                                                                                    
+  ──────                                                                                                                                                    
+  ### 1. ¿Cómo estamos aplicando Flask?                                                                                                                     
+                                                                                                                                                            
+  La aplicación web está construida con Flask (Python 3.14) bajo el patrón de arquitectura por capas y renderizado en servidor con plantillas Jinja2 (sin   
+  frameworks SPA pesados):                                                                                                                                  
+                                                                                                                                                            
+  • Patrón Factory (app/__init__.py): La función create_app() inicializa la aplicación, inyecta el usuario actual en todas las vistas con @app.             
+  context_processor y registra los blueprints.                                                                                                              
+  • Blueprints Modulares (app/*/routes.py):                                                                                                                 
+      • auth: Registro, login y logout con cookies HttpOnly (app/auth/routes.py).                                                                           
+      • catalog: Vistas públicas del catálogo, fichas de detalle, buscador con filtros y consumo de APIs externas (app/catalog/routes.py).                  
+      • library: Gestión de la biblioteca personal del usuario logueado (app/library/routes.py).                                                            
+      • admin: Panel de administración con control de acceso mediante el decorador @admin_required (app/admin/routes.py).                                   
+  • Vistas con Jinja2 (app/templates/): Todas las páginas heredan de app/templates/base.html, adaptando la interfaz dinámicamente si el visitante es anónimo,
+  usuario normal o administrador.                                                                                                                           
+  ──────                                                                                                                                                    
+  ### 2. ¿Cómo estamos cumpliendo con MongoDB?                                                                                                              
+                                                                                                                                                            
+  MongoDB es la fuente de verdad permanente del sistema. No se utiliza como una base de datos relacional simulada, sino aprovechando sus fortalezas NoSQL:  
+                                                                                                                                                            
+  • 5 Colecciones Estrictas (sistemaentretenimiento):                                                                                                       
+      • movies, series, animes: Fichas con documentos embebidos para fuentes externas (external: { source, id }) y arreglos para categorías (genres: [...]).
+      • users: Cuentas de usuario con roles y contraseñas hasheadas.                                                                                        
+      • library_entries: Colección de unión referenciada mediante ObjectId (user_id y title_id) que desacopla la actividad del usuario del catálogo general.
+  • Validación a nivel de motor ($jsonSchema):                                                                                                              
+      • Definida en mongodb/init/01_collections.js con additionalProperties: false. MongoDB rechaza a nivel de base de datos cualquier documento que intente
+      guardar un campo no autorizado o un tipo erróneo.                                                                                                     
+  • Índices NoSQL Especializados (mongodb/init/02_indexes.js):                                                                                              
+      • Índice de Texto Ponderado (text_busqueda): Búsqueda en lenguaje español que otorga más peso al título (weight: 10) que a la sinopsis (3) o al género
+      (1).                                                                                                                                                  
+      • Índice Único Parcial (uq_fuente_externa): Evita duplicar películas o animes que provengan de la misma API externa, pero permite títulos manuales    
+      (external: null).                                                                                                                                     
+      • Índice Único Compuesto (uq_usuario_titulo): Asegura que un usuario solo tenga un estado por cada título en su biblioteca.                           
+  • Agregaciones (mongodb/aggregations/): Pipelines analíticos ($match, $group, $sort, $project) para calcular los títulos mejor calificados, géneros más   
+  populares y actividad de usuarios.                                                                                                                        
+  ──────                                                                                                                                                    
+  ### 3. ¿Cómo estamos cumpliendo con Redis?                                                                                                                
+                                                                                                                                                            
+  Redis no duplica los datos de Mongo, sino que cumple 4 funciones específicas de memoria en tiempo real que serían costosas o ineficientes en disco:       
+                                                                                                                                                            
+  │ Diagram exceeds terminal width (235 > 158 cols)                                                                                                         
+  │ Displayed as code block. Widen terminal to view inline.                                                                                                 
+                                                                                                                                                            
+    flowchart TD                                                                                                                                            
+        subgraph Browser ["Navegador Web"]                                                                                                                  
+            U["Usuario"]                                                                                                                                    
+        end                                                                                                                                                 
+                                                                                                                                                            
+        subgraph App ["Flask"]                                                                                                                              
+            F["Rutas y Servicios"]                                                                                                                          
+        end                                                                                                                                                 
+                                                                                                                                                            
+        subgraph Redis ["Redis 5.0 (Memoria Rápida)"]                                                                                                       
+            S["1. Sesiones: sess:<sid>\n(TTL 7 días)"]                                                                                                      
+            C["2. Cache-Aside: cache:search / cache:title\n(TTL 60s / 300s)"]                                                                               
+            N["3. Contadores: cnt:views / cnt:likes\n(INCR atómico)"]                                                                                       
+            R["4. Ranking: rank:popular\n(Sorted Set / ZSET)"]                                                                                              
+        end                                                                                                                                                 
+                                                                                                                                                            
+        subgraph Mongo ["MongoDB (Disco / Persistencia)"]                                                                                                   
+            M[("sistemaentretenimiento\nmovies, series, animes, users, library")]                                                                           
+        end                                                                                                                                                 
+                                                                                                                                                            
+        U -->|Cookie sid| F                                                                                                                                 
+        F -->|Valida sesión rápida| S                                                                                                                       
+        F -->|Busca en cache antes de ir a Mongo| C                                                                                                         
+        C -.->|Si hay miss| M                                                                                                                               
+        F -->|Incrementa vistas al abrir ficha| N                                                                                                           
+        F -->|Suma score de visitas| R                                                                                                                      
+        F -->|Guarda biblioteca y usuarios| M                                                                                                               
+                                                                                                                                                            
+  1. Gestión de Sesiones Propias (app/auth/session.py):                                                                                                     
+      • Al loguearse, se crea una clave sess:<sid> tipo Hash en Redis con el user_id y un tiempo de expiración automático (TTL) de 7 días. El navegador solo
+      guarda una cookie cifrada con el sid.                                                                                                                 
+  2. Estrategia Cache-Aside (app/cache.py):                                                                                                                 
+      • Cuando alguien busca en el catálogo (/search), Flask consulta primero a Redis (cache:search:...). Si ya fue buscada en los últimos 60 segundos,     
+      responde al instante desde la RAM sin tocar MongoDB.                                                                                                  
+      • Las fichas de títulos se cachean 300 segundos (cache:title:...). Al editar o borrar un título, la caché se invalida inmediatamente.                 
+  3. Contadores Atómicos:                                                                                                                                   
+      • cnt:views:<id>: Cada clic en un título ejecuta un INCR directo en Redis, soportando alta concurrencia de visitas sin bloquear la base de datos      
+      documental.                                                                                                                                           
+      • cnt:likes:<id>: Mantiene el conteo rápido de favoritos sincronizado con Mongo.                                                                      
+  4. Ranking de Popularidad con Sorted Sets (ZSET):                                                                                                         
+      • Utiliza la estructura nativa rank:popular de Redis. Con ZINCRBY, cada visita suma 1 al puntaje del título, y con ZREVRANGE la página de inicio      
+      obtiene al instante el "Top 8 de Tendencias".                                                                                                         
+                                                                                                                                                            
+  ──────                                                                                                                                                    
+  ### Conclusión                                                                                                                                            
+                                                                                                                                                            
+  El sistema cumple de manera integral:                                                                                                                     
+                                                                                                                                                            
+  • Flask: Proporciona el servidor, rutas y renderizado visual.                                                                                             
+  • MongoDB: Es el almacén documental seguro, estructurado e indexado.                                                                                      
+  • Redis: Aporta rendimiento extremo para sesiones, cache de consultas, contadores en tiempo real y ranking de tendencias.

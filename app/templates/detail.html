@@ -1,128 +1,189 @@
 {% extends "base.html" %}
-{% block title %}{{ title.title }}{% endblock %}
+{% block title %}{{ title.title }} — Biblioteca{% endblock %}
 {% block content %}
 {% set type_labels = {"movie": "Película", "series": "Serie", "anime": "Anime"} %}
+{% set status_icons = {"watching": "👁️", "watched": "✅", "planned": "📌", "dropped": "❌"} %}
 {% set status_labels = {"watching": "Viendo", "watched": "Visto", "planned": "Pendiente", "dropped": "Abandonado"} %}
 
-<a class="back" href="/search">← Volver al catálogo</a>
+<div class="breadcrumb">
+  <a class="back-link" href="/search">← Volver al catálogo</a>
+</div>
 
-<article class="detail">
-  <div class="detail-poster">
-    {% if title.poster_url %}
-      <img src="{{ title.poster_url }}" alt="Póster de {{ title.title }}">
-    {% else %}
-      <span>{{ title.title[0] }}</span>
-    {% endif %}
+<article class="detail-hero">
+  <div class="detail-poster-wrapper">
+    <div class="detail-poster">
+      {% if title.poster_url %}
+        <img src="{{ title.poster_url }}" alt="Póster de {{ title.title }}">
+      {% else %}
+        <span>{{ title.title[0] }}</span>
+      {% endif %}
+    </div>
+    <div class="type-pill {{ title.type }}">{{ type_labels.get(title.type, title.type) }}</div>
   </div>
 
-  <div class="detail-body">
-    <h1>{{ title.title }}</h1>
-    {% if title.original_title and title.original_title != title.title %}
-      <p class="muted">{{ title.original_title }}</p>
-    {% endif %}
-
-    <p class="meta">
-      {{ title.year }} · {{ type_labels.get(title.type, title.type) }}
-      {% if title.runtime_minutes %} · {{ title.runtime_minutes }} min{% endif %}
-      {% if title.episodes_total %} · {{ title.episodes_total }} episodios{% endif %}
-      {% if title.external_rating %} · ★ {{ title.external_rating }}{% endif %}
-    </p>
-
-    <p class="synopsis">{{ title.synopsis }}</p>
-
-    <div class="rating-box">
-      <div>
-        <strong>{{ ratings.average if ratings.average is not none else "—" }}</strong>
-        <span>promedio de usuarios ({{ ratings.count }})</span>
-      </div>
-      <div>
-        <strong>{{ title.external_rating if title.external_rating else "—" }}</strong>
-        <span>valoración de la fuente</span>
-      </div>
-      <div>
-        <strong>♥ {{ likes | default(0) }}</strong>
-        <span>favoritos en la biblioteca</span>
+  <div class="detail-content">
+    <div class="title-header">
+      <h1>{{ title.title }}</h1>
+      <div class="title-meta">
+        <span class="meta-tag">{{ title.year or "Año s/f" }}</span>
+        {% if title.external_rating %}
+          <span class="meta-tag rating-star">★ {{ title.external_rating }} <small>IMDb</small></span>
+        {% endif %}
+        {% if entry %}
+          <span class="status-badge {{ entry.status }}">
+            {{ status_icons.get(entry.status, "•") }} {{ status_labels.get(entry.status, entry.status) }}
+          </span>
+        {% endif %}
       </div>
     </div>
 
-    {% if entry %}
-      <p class="badge">En tu biblioteca: {{ status_labels.get(entry.status, entry.status) }}</p>
+    <p class="synopsis">{{ title.synopsis }}</p>
+
+    {% if title.genres %}
+      <div class="genre-list">
+        {% for genre in title.genres %}
+          <span class="genre-chip">{{ genre }}</span>
+        {% endfor %}
+      </div>
     {% endif %}
 
+    <!-- Métricas en vivo con indicadores de Redis -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-header">
+          <strong>★ {{ ratings.average if ratings.average is not none else "—" }}</strong>
+          <span class="metric-tag redis">Mongo Agg</span>
+        </div>
+        <span class="metric-label">Nota de usuarios ({{ ratings.count }})</span>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <strong>👁️ {{ views | default(1) }}</strong>
+          <span class="metric-tag redis">Redis INCR</span>
+        </div>
+        <span class="metric-label">Visitas registradas</span>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <strong>❤️ {{ likes | default(0) }}</strong>
+          <span class="metric-tag redis">Redis Sync</span>
+        </div>
+        <span class="metric-label">Favoritos de la comunidad</span>
+      </div>
+    </div>
+
+    <!-- Panel de control de Mi Biblioteca (Diseño no-formulario) -->
     {% if current_user %}
-      <section id="library" class="library-form">
-        <h2>Mi biblioteca</h2>
-        {% if form_error %}<p class="error">{{ form_error }}</p>{% endif %}
-        <form method="post" action="/library/{{ title._id }}">
-          <div class="form-row">
-            <label>Estado
-              <select name="status">
-                {% for value, label in status_labels.items() %}
-                  <option value="{{ value }}" {% if entry and entry.status == value %}selected{% endif %}>{{ label }}</option>
+      <section id="library" class="interactive-panel">
+        <div class="panel-header">
+          <h3>🎮 Mi seguimiento personal</h3>
+          <span class="panel-subtitle">Elige tu estado y personaliza tu avance</span>
+        </div>
+
+        {% if form_error %}
+          <div class="alert-error">{{ form_error }}</div>
+        {% endif %}
+
+        <form method="post" action="/library/{{ title._id }}" class="library-interactive-form">
+          <!-- Selector de Estado con Chips visuales -->
+          <div class="control-group">
+            <span class="group-label">Estado actual</span>
+            <div class="status-chips">
+              {% for value, label in status_labels.items() %}
+                <label class="status-chip-label">
+                  <input type="radio" name="status" value="{{ value }}" 
+                    {% if (entry and entry.status == value) or (not entry and value == 'watching') %}checked{% endif %}>
+                  <span class="chip-content {{ value }}">
+                    <span class="chip-icon">{{ status_icons.get(value) }}</span>
+                    <span class="chip-text">{{ label }}</span>
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Puntuación visual del 1 al 10 y Favorito -->
+          <div class="control-grid">
+            <div class="control-group">
+              <span class="group-label">Mi puntuación personal</span>
+              <div class="rating-scale">
+                {% for n in range(1, 11) %}
+                  <label class="rating-chip-label">
+                    <input type="radio" name="rating" value="{{ n }}" 
+                      {% if entry and entry.rating == n %}checked{% endif %}>
+                    <span class="rating-box">{{ n }}</span>
+                  </label>
                 {% endfor %}
-              </select>
-            </label>
-            <label>Mi nota (1–10)
-              <input type="number" name="rating" min="1" max="10" value="{{ entry.rating if entry and entry.rating else '' }}">
-            </label>
-            <label class="checkbox">
-              <input type="checkbox" name="favorite" {% if entry and entry.favorite %}checked{% endif %}>
-              Me gusta
-            </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <span class="group-label">Colección de Favoritos</span>
+              <label class="favorite-toggle">
+                <input type="checkbox" name="favorite" {% if entry and entry.favorite %}checked{% endif %}>
+                <span class="toggle-card">
+                  <span class="heart-icon">❤️</span>
+                  <span class="toggle-text">Marcar como Favorito</span>
+                </span>
+              </label>
+            </div>
           </div>
-          <div class="form-row">
-            <label>Temporada
-              <input type="number" name="progress_season" min="1" value="{{ entry.progress.season if entry and entry.progress else '' }}">
-            </label>
-            <label>Episodio
-              <input type="number" name="progress_episode" min="1" value="{{ entry.progress.episode if entry and entry.progress else '' }}">
-            </label>
+
+          <!-- Progreso (para series o anime) -->
+          {% if title.type in ['series', 'anime'] %}
+            <div class="control-group">
+              <span class="group-label">Progreso de visualización</span>
+              <div class="progress-inputs">
+                <div class="input-stepper">
+                  <label>Temporada</label>
+                  <input type="number" name="progress_season" min="1" placeholder="Ej: 1" 
+                    value="{{ entry.progress.season if entry and entry.progress else '1' }}">
+                </div>
+                <div class="input-stepper">
+                  <label>Episodio</label>
+                  <input type="number" name="progress_episode" min="1" placeholder="Ej: 1" 
+                    value="{{ entry.progress.episode if entry and entry.progress else '1' }}">
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
+          <!-- Notas personales -->
+          <div class="control-group">
+            <label for="notes_input" class="group-label">Notas y comentarios personales</label>
+            <textarea id="notes_input" name="notes" rows="2" maxlength="500" 
+              placeholder="Escribe tus impresiones, episodios favoritos o recordatorios..." 
+              class="notes-textarea">{{ entry.notes if entry and entry.notes else '' }}</textarea>
           </div>
-          <label>Notas
-            <textarea name="notes" rows="2" maxlength="500">{{ entry.notes if entry and entry.notes else '' }}</textarea>
-          </label>
-          <button type="submit">Guardar en mi biblioteca</button>
+
+          <!-- Botones de Acción -->
+          <div class="panel-actions">
+            <button type="submit" class="btn-primary">
+              💾 Guardar en mi biblioteca
+            </button>
+          </div>
         </form>
 
         {% if entry %}
-          <form method="post" action="/library/{{ title._id }}/delete" class="delete-form">
-            <button type="submit" class="link danger">Quitar de mi biblioteca</button>
+          <form method="post" action="/library/{{ title._id }}/delete" class="delete-library-form">
+            <button type="submit" class="btn-danger-link" onclick="return confirm('¿Quitar este título de tu biblioteca?')">
+              🗑️ Quitar de mi biblioteca
+            </button>
           </form>
         {% endif %}
       </section>
     {% else %}
-      <p class="muted"><a href="/auth/login?next=/titles/{{ title._id }}">Ingresá</a> para guardar este título en tu biblioteca.</p>
+      <div class="login-prompt">
+        <p>¿Quieres seguir este título? <a href="/auth/login?next=/titles/{{ title._id }}">Inicia sesión</a> para agregarlo a tu biblioteca personal.</p>
+      </div>
     {% endif %}
 
-
-    <dl class="facts">
-      {% if title.directors %}
-        <dt>Dirección</dt><dd>{{ title.directors | join(", ") }}</dd>
-      {% endif %}
-      {% if title.cast %}
-        <dt>Elenco</dt><dd>{{ title.cast | join(", ") }}</dd>
-      {% endif %}
-      {% if title.studios %}
-        <dt>Estudios</dt><dd>{{ title.studios | join(", ") }}</dd>
-      {% endif %}
-      {% if title.genres %}
-        <dt>Géneros</dt><dd>{{ title.genres | join(", ") }}</dd>
-      {% endif %}
-      {% if title.awards %}
-        <dt>Premios</dt><dd>{{ title.awards | join(", ") }}</dd>
-      {% endif %}
-    </dl>
-
-    {% if title.seasons %}
-      <h2>Temporadas</h2>
-      <table class="seasons">
-        <thead><tr><th>Temporada</th><th>Episodios</th></tr></thead>
-        <tbody>
-          {% for season in title.seasons %}
-            <tr><td>{{ season.number }}</td><td>{{ season.episodes }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    {% if title.external %}
+      <div class="source-info">
+        <small class="muted">Fuente: {{ title.external.source }} · {{ title.external.id }}</small>
+      </div>
     {% endif %}
   </div>
 </article>

@@ -22,21 +22,21 @@ function summarize(label, explain) {
 
 summarize(
   "texto_libre",
-  db.titles.find({ $text: { $search: "drama" } }).explain("executionStats")
+  db.movies.find({ $text: { $search: "drama" } }).explain("executionStats")
 );
 
 summarize(
-  "filtro_tipo_anio",
-  db.titles
-    .find({ type: "series", year: { $gte: 2010 } })
+  "filtro_anio",
+  db.series
+    .find({ year: { $gte: 2010 } })
     .sort({ year: -1 })
     .explain("executionStats")
 );
 
 summarize(
-  "genero_tipo",
-  db.titles
-    .find({ type: "anime", genres: "Acción" })
+  "genero",
+  db.animes
+    .find({ genres: "Acción" })
     .explain("executionStats")
 );
 

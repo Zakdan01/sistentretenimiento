@@ -1,0 +1,7 @@
+<nav class="tabs admin-tabs">
+  <a href="/admin" class="{% if request.endpoint == 'admin.dashboard' %}active{% endif %}">Resumen</a>
+  <a href="/admin/titles" class="{% if request.endpoint in ['admin.titles', 'admin.title_create', 'admin.title_edit'] %}active{% endif %}">Títulos</a>
+  <a href="/admin/users" class="{% if request.endpoint in ['admin.users', 'admin.user_create', 'admin.user_edit'] %}active{% endif %}">Usuarios</a>
+  <a href="/admin/reports" class="{% if request.endpoint == 'admin.reports' %}active{% endif %}">Reportes</a>
+  <a href="/import" class="{% if request.endpoint in ['catalog.import_search', 'catalog.import_create'] %}active{% endif %}">Importar API</a>
+</nav>

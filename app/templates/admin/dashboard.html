@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Administración{% endblock %}
+{% block content %}
+<h1>Panel de administración</h1>
+{% include "admin/_nav.html" %}
+
+<div class="stats">
+  <div class="stat"><strong>{{ stats.catalog_total }}</strong><span>títulos en el catálogo</span></div>
+  <div class="stat"><strong>{{ stats.users_total }}</strong><span>usuarios ({{ stats.admins }} admin)</span></div>
+  <div class="stat"><strong>{{ stats.entries_total }}</strong><span>entradas de biblioteca</span></div>
+  <div class="stat"><strong>{{ stats.favorites }}</strong><span>favoritos</span></div>
+  <div class="stat"><strong>{{ stats.avg_rating if stats.avg_rating is not none else "—" }}</strong><span>nota media de usuarios</span></div>
+</div>
+
+<section class="admin-columns">
+  <div class="card">
+    <h2>Catálogo por tipo</h2>
+    <table class="admin-table">
+      <thead><tr><th>Tipo</th><th>Títulos</th><th></th></tr></thead>
+      <tbody>
+        {% for type, total in stats.catalog.items() %}
+          <tr>
+            <td>{{ {"movie": "Películas", "series": "Series", "anime": "Anime"}.get(type, type) }}</td>
+            <td>{{ total }}</td>
+            <td><a href="/admin/titles?type={{ type }}">Ver</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Bibliotecas por estado</h2>
+    <table class="admin-table">
+      <thead><tr><th>Estado</th><th>Entradas</th></tr></thead>
+      <tbody>
+        {% set status_labels = {"watching": "Viendo", "watched": "Vistas", "planned": "Pendientes", "dropped": "Abandonadas"} %}
+        {% for status, total in stats.status_counts.items() %}
+          <tr><td>{{ status_labels.get(status, status) }}</td><td>{{ total }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>Géneros más presentes</h2>
+    <a href="/admin/reports">Ver reportes completos</a>
+  </div>
+  <table class="admin-table">
+    <thead><tr><th>Género</th><th>Títulos</th><th>Nota media</th></tr></thead>
+    <tbody>
+      {% for row in genres %}
+        <tr>
+          <td>{{ row.genre }}</td>
+          <td>{{ row.titles }}</td>
+          <td>{{ row.avg_rating if row.avg_rating is not none else "—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Altas recientes</h2>
+  <table class="admin-table">
+    <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
+    <tbody>
+      {% for user in recent_users %}
+        <tr>
+          <td><a href="/admin/users/{{ user._id }}/edit">{{ user.display_name }}</a></td>
+          <td>{{ user.email }}</td>
+          <td>{{ user.role }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

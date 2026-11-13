@@ -64,7 +64,7 @@ def save(title_id):
             400,
         )
 
-    upsert_entry(db, g.user["_id"], title["_id"], data)
+    upsert_entry(db, g.user["_id"], title["_id"], title["type"], data)
     _sync_title_likes(db, title["_id"])
     invalidate_titles(get_redis_client())
     return redirect(url_for("catalog.detail", title_id=title["_id"], _anchor="library"))

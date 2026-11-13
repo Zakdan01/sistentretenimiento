@@ -1,6 +1,6 @@
 from bson import ObjectId
 from bson.errors import InvalidId
-from flask import g, redirect, request, url_for
+from flask import abort, g, redirect, request, url_for
 
 from app.auth.session import load_session
 from app.extensions import get_mongo_db, get_redis_client
@@ -19,6 +19,19 @@ def login_required(view):
     wrapped.__name__ = view.__name__
     return wrapped
 
+
+def admin_required(view):
+    """Exige sesión iniciada y rol `admin`."""
+
+    def wrapped(*args, **kwargs):
+        if not g.get("user"):
+            return redirect(url_for("auth.login", next=request.full_path))
+        if g.user.get("role") != "admin":
+            abort(403)
+        return view(*args, **kwargs)
+
+    wrapped.__name__ = view.__name__
+    return wrapped
 
 
 def load_logged_in_user() -> None:

@@ -7,7 +7,9 @@ Redis cumple cuatro funciones dentro del sistema:
 3. **Contadores** de visitas y favoritos (`cnt:*`).
 4. **Ranking** de títulos populares (`rank:popular`), un sorted set.
 
-La implementación vive en `app/auth/session.py` y `app/cache.py`.
+La implementación vive en `app/auth/session.py` y `app/cache.py`. El panel de
+administración reutiliza la misma invalidación: al crear, editar o borrar un
+título elimina `cache:title:*`, `cache:search:*` y `cache:api:*`.
 
 ## Mapa de claves
 
@@ -52,7 +54,7 @@ redis-cli flushdb   # solo para desarrollo o pruebas
 ## Pruebas
 
 Las pruebas usan la base 15 de Redis (`redis://localhost:6379/15`) y hacen
-`flushdb` en cada fixture:
+`flushdb` en cada fixture. La suite completa son 121 pruebas:
 
 ```powershell
 python -m pytest tests/test_auth_session.py tests/test_cache.py tests/test_cache_routes.py -q

@@ -1,42 +1,93 @@
 {% extends "base.html" %}
-{% block title %}Mi biblioteca{% endblock %}
+{% block title %}Mi Biblioteca — Colección Personal{% endblock %}
 {% block content %}
-<h1>Mi biblioteca</h1>
+<div class="library-header">
+  <div>
+    <h1>Mi Biblioteca Personal</h1>
+    <p class="muted">Tus películas, series y anime organizados por estado de visualización.</p>
+  </div>
+</div>
 
-<nav class="tabs">
-  <a href="/library" class="{% if not active_status %}active{% endif %}">Todas ({{ counts.values() | sum }})</a>
-  <a href="/library?status=watching" class="{% if active_status == 'watching' %}active{% endif %}">Viendo ({{ counts.watching }})</a>
-  <a href="/library?status=watched" class="{% if active_status == 'watched' %}active{% endif %}">Vistas ({{ counts.watched }})</a>
-  <a href="/library?status=planned" class="{% if active_status == 'planned' %}active{% endif %}">Pendientes ({{ counts.planned }})</a>
-  <a href="/library?status=dropped" class="{% if active_status == 'dropped' %}active{% endif %}">Abandonadas ({{ counts.dropped }})</a>
+<nav class="library-tabs">
+  <a href="/library" class="tab-pill {% if not active_status %}active{% endif %}">
+    <span>Todas</span>
+    <span class="tab-count">{{ counts.values() | sum }}</span>
+  </a>
+  <a href="/library?status=watching" class="tab-pill watching {% if active_status == 'watching' %}active{% endif %}">
+    <span>👁️ Viendo</span>
+    <span class="tab-count">{{ counts.watching }}</span>
+  </a>
+  <a href="/library?status=watched" class="tab-pill watched {% if active_status == 'watched' %}active{% endif %}">
+    <span>✅ Vistas</span>
+    <span class="tab-count">{{ counts.watched }}</span>
+  </a>
+  <a href="/library?status=planned" class="tab-pill planned {% if active_status == 'planned' %}active{% endif %}">
+    <span>📌 Pendientes</span>
+    <span class="tab-count">{{ counts.planned }}</span>
+  </a>
+  <a href="/library?status=dropped" class="tab-pill dropped {% if active_status == 'dropped' %}active{% endif %}">
+    <span>❌ Abandonadas</span>
+    <span class="tab-count">{{ counts.dropped }}</span>
+  </a>
 </nav>
 
 {% if entries %}
   {% set status_labels = {"watching": "Viendo", "watched": "Vista", "planned": "Pendiente", "dropped": "Abandonada"} %}
-  <div class="grid">
+  {% set status_icons = {"watching": "👁️", "watched": "✅", "planned": "📌", "dropped": "❌"} %}
+  <div class="library-grid">
     {% for entry in entries %}
-      <a class="title-card" href="/titles/{{ entry.title._id }}">
-        <div class="poster">
-          {% if entry.title.poster_url %}
-            <img src="{{ entry.title.poster_url }}" alt="Póster de {{ entry.title.title }}" loading="lazy">
-          {% else %}
-            <span>{{ entry.title.title[0] }}</span>
+      <div class="library-card">
+        <a class="card-poster-link" href="/titles/{{ entry.title._id }}">
+          <div class="poster">
+            {% if entry.title.poster_url %}
+              <img src="{{ entry.title.poster_url }}" alt="Póster de {{ entry.title.title }}" loading="lazy">
+            {% else %}
+              <span>{{ entry.title.title[0] }}</span>
+            {% endif %}
+            
+            <span class="badge-status {{ entry.status }}">
+              {{ status_icons.get(entry.status) }} {{ status_labels.get(entry.status, entry.status) }}
+            </span>
+
+            {% if entry.favorite %}
+              <span class="badge-favorite" title="Favorito">❤️</span>
+            {% endif %}
+
+            {% if entry.rating %}
+              <span class="badge-user-rating">★ {{ entry.rating }}/10</span>
+            {% endif %}
+          </div>
+        </a>
+
+        <div class="library-card-body">
+          <h3 class="card-title">
+            <a href="/titles/{{ entry.title._id }}">{{ entry.title.title }}</a>
+          </h3>
+          <p class="card-meta">
+            {{ entry.title.year or "s/f" }} · {{ entry.title_type | capitalize }}
+          </p>
+
+          {% if entry.progress %}
+            <div class="progress-pill">
+              <span>Avance: <strong>T{{ entry.progress.season }} · E{{ entry.progress.episode }}</strong></span>
+            </div>
+          {% endif %}
+
+          {% if entry.notes %}
+            <p class="card-user-note" title="{{ entry.notes }}">
+              💬 "{{ entry.notes }}"
+            </p>
           {% endif %}
         </div>
-        <h3>{{ entry.title.title }}</h3>
-        <p class="badge">{{ status_labels.get(entry.status, entry.status) }}</p>
-        {% if entry.favorite %}<p class="rating">♥ Favorita</p>{% endif %}
-        {% if entry.rating %}<p class="muted">Mi nota: {{ entry.rating }}/10</p>{% endif %}
-        {% if entry.progress %}
-          <p class="muted">T{{ entry.progress.season }} · E{{ entry.progress.episode }}</p>
-        {% endif %}
-      </a>
+      </div>
     {% endfor %}
   </div>
 {% else %}
-  <p class="empty">
-    Todavía no guardaste títulos con este estado.
-    <a href="/search">Buscá algo para agregar</a>.
-  </p>
+  <div class="empty-state">
+    <div class="empty-icon">🎬</div>
+    <h3>No hay títulos en esta sección</h3>
+    <p class="muted">Aún no has agregado títulos con este estado a tu biblioteca.</p>
+    <a href="/search" class="btn-primary">Explorar catálogo y agregar</a>
+  </div>
 {% endif %}
 {% endblock %}

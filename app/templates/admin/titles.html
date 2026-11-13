@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Administrar títulos{% endblock %}
+{% block content %}
+<h1>Administrar títulos</h1>
+{% include "admin/_nav.html" %}
+
+<div class="section-head">
+  <p class="muted">{{ total }} título{% if total != 1 %}s{% endif %} en el catálogo</p>
+  <a class="button" href="/admin/titles/new">Agregar título</a>
+</div>
+
+<form class="filters" method="get" action="/admin/titles">
+  <input type="search" name="q" value="{{ filters.q }}" placeholder="Título o sinopsis">
+  <select name="type">
+    <option value="">Todos los tipos</option>
+    <option value="movie" {% if filters.type == "movie" %}selected{% endif %}>Películas</option>
+    <option value="series" {% if filters.type == "series" %}selected{% endif %}>Series</option>
+    <option value="anime" {% if filters.type == "anime" %}selected{% endif %}>Anime</option>
+  </select>
+  <select name="genre">
+    <option value="">Todos los géneros</option>
+    {% for genre in genres %}
+      <option value="{{ genre }}" {% if filters.genre == genre %}selected{% endif %}>{{ genre }}</option>
+    {% endfor %}
+  </select>
+  <select name="sort">
+    <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Mejor valoradas</option>
+    <option value="year" {% if filters.sort == "year" %}selected{% endif %}>Más recientes</option>
+    <option value="title" {% if filters.sort == "title" %}selected{% endif %}>Título A–Z</option>
+    <option value="relevance" {% if filters.sort == "relevance" %}selected{% endif %}>Relevancia</option>
+  </select>
+  <button type="submit">Filtrar</button>
+</form>
+
+{% if titles %}
+  {% set type_labels = {"movie": "Película", "series": "Serie", "anime": "Anime"} %}
+  <table class="admin-table">
+    <thead>
+      <tr><th></th><th>Título</th><th>Tipo</th><th>Año</th><th>Nota</th><th>Acciones</th></tr>
+    </thead>
+    <tbody>
+      {% for title in titles %}
+        <tr>
+          <td class="thumb">
+            {% if title.poster_url %}
+              <img src="{{ title.poster_url }}" alt="" loading="lazy">
+            {% else %}
+              <span>{{ title.title[0] }}</span>
+            {% endif %}
+          </td>
+          <td><a href="/titles/{{ title._id }}">{{ title.title }}</a></td>
+          <td>{{ type_labels.get(title.type, title.type) }}</td>
+          <td>{{ title.year or "—" }}</td>
+          <td>{{ title.external_rating if title.external_rating is not none else "—" }}</td>
+          <td class="actions">
+            <a href="/admin/titles/{{ title._id }}/edit">Editar</a>
+            <form method="post" action="/admin/titles/{{ title._id }}/delete" onsubmit="return confirm('¿Eliminar «{{ title.title }}» y sus entradas de biblioteca?');">
+              <button type="submit" class="link danger">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="empty">No hay títulos con esos filtros.</p>
+{% endif %}
+
+{% if previous_url or next_url %}
+  <nav class="pagination">
+    {% if previous_url %}<a href="{{ previous_url }}">← Anterior</a>{% endif %}
+    <span>Página {{ filters.page }} de {{ total_pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}">Siguiente →</a>{% endif %}
+  </nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,177 @@
+{
+  "laura@biblioteca.local": [
+    {
+      "source": "imdb",
+      "external_id": "tt0816692",
+      "status": "watched",
+      "favorite": true,
+      "rating": 9,
+      "progress": null,
+      "notes": "La vi dos veces; el montaje es impecable."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0903747",
+      "status": "watching",
+      "favorite": true,
+      "rating": 9,
+      "progress": {
+        "season": 2,
+        "episode": 5
+      },
+      "notes": "Engancha desde el primer capítulo."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0245429",
+      "status": "watched",
+      "favorite": true,
+      "rating": 10,
+      "progress": null,
+      "notes": "Una de mis favoritas de todos los tiempos."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0109830",
+      "status": "planned",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": "Me la recomendaron para el fin de semana."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt4574334",
+      "status": "planned",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0347149",
+      "status": "dropped",
+      "favorite": false,
+      "rating": 5,
+      "progress": null,
+      "notes": "No me convenció el ritmo."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt1190634",
+      "status": "dropped",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0096283",
+      "status": "watching",
+      "favorite": false,
+      "rating": 8,
+      "progress": {
+        "season": 1,
+        "episode": 3
+      },
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0110912",
+      "status": "watched",
+      "favorite": false,
+      "rating": 8,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt2356777",
+      "status": "watched",
+      "favorite": false,
+      "rating": 7,
+      "progress": null,
+      "notes": "Buena, aunque decae en la última temporada."
+    }
+  ],
+  "diego@biblioteca.local": [
+    {
+      "source": "imdb",
+      "external_id": "tt5311514",
+      "status": "watching",
+      "favorite": true,
+      "rating": 9,
+      "progress": {
+        "season": 3,
+        "episode": 10
+      },
+      "notes": "La animación es espectacular."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt1853728",
+      "status": "watched",
+      "favorite": false,
+      "rating": 8,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0411008",
+      "status": "watched",
+      "favorite": true,
+      "rating": 9,
+      "progress": null,
+      "notes": "Final redondo."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0388629",
+      "status": "planned",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": "La tengo pendiente para vacaciones."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0361748",
+      "status": "planned",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0185906",
+      "status": "dropped",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": "La dejé en la primera temporada."
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt9335498",
+      "status": "dropped",
+      "favorite": false,
+      "rating": 6,
+      "progress": null,
+      "notes": null
+    },
+    {
+      "source": "imdb",
+      "external_id": "tt0120815",
+      "status": "watching",
+      "favorite": false,
+      "rating": null,
+      "progress": null,
+      "notes": "La empecé anoche."
+    }
+  ]
+}

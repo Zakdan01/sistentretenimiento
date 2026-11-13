@@ -1,0 +1,20 @@
+[
+  {
+    "display_name": "Administrador",
+    "email": "admin@biblioteca.local",
+    "password": "Admin12345",
+    "role": "admin"
+  },
+  {
+    "display_name": "Laura Gómez",
+    "email": "laura@biblioteca.local",
+    "password": "Laura12345",
+    "role": "user"
+  },
+  {
+    "display_name": "Diego Pérez",
+    "email": "diego@biblioteca.local",
+    "password": "Diego12345",
+    "role": "user"
+  }
+]

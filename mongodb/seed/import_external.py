@@ -47,7 +47,7 @@ def main() -> None:
         print(f"{status}: {document['title']} ({document['_id']})")
         imported += 1
 
-    print(f"{imported} títulos procesados en {db.name}.titles")
+    print(f"{imported} títulos procesados en {db.name} (movies/series/animes)")
 
 
 if __name__ == "__main__":

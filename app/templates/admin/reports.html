@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block content %}
+<h1>Reportes</h1>
+{% include "admin/_nav.html" %}
+
+<section class="card">
+  <h2>Salud del catálogo</h2>
+  <table class="admin-table">
+    <thead><tr><th>Tipo</th><th>Títulos</th><th>Nota media</th><th>Año medio</th><th>Con imagen</th></tr></thead>
+    <tbody>
+      {% for row in health %}
+        <tr>
+          <td>{{ {"movie": "Películas", "series": "Series", "anime": "Anime"}.get(row.type, row.type) }}</td>
+          <td>{{ row.titles }}</td>
+          <td>{{ row.avg_external_rating if row.avg_external_rating is not none else "—" }}</td>
+          <td>{{ row.avg_year or "—" }}</td>
+          <td>{{ row.with_image }} ({{ ((row.with_image / row.titles) * 100) | round(1) if row.titles else 0 }}%)</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Géneros más presentes</h2>
+  <table class="admin-table">
+    <thead><tr><th>Género</th><th>Títulos</th><th>Nota media</th><th>Tipos</th></tr></thead>
+    <tbody>
+      {% for row in genres %}
+        <tr>
+          <td>{{ row.genre }}</td>
+          <td>{{ row.titles }}</td>
+          <td>{{ row.avg_rating if row.avg_rating is not none else "—" }}</td>
+          <td>{{ row.types | join(", ") }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Bibliotecas por usuario y estado</h2>
+  <table class="admin-table">
+    <thead><tr><th>Usuario</th><th>Email</th><th>Total</th><th>Estados</th></tr></thead>
+    <tbody>
+      {% for row in library %}
+        <tr>
+          <td>{{ row.user }}</td>
+          <td>{{ row.email }}</td>
+          <td>{{ row.total }}</td>
+          <td>
+            {% for status in row.statuses %}{{ status.status }}: {{ status.total }}{% if not loop.last %}, {% endif %}{% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Top 5 por tipo</h2>
+  <table class="admin-table">
+    <thead><tr><th>Tipo</th><th>#</th><th>Título</th><th>Nota</th></tr></thead>
+    <tbody>
+      {% for row in top_rated %}
+        <tr>
+          <td>{{ {"movie": "Películas", "series": "Series", "anime": "Anime"}.get(row.type, row.type) }}</td>
+          <td>{{ row.position }}</td>
+          <td>{{ row.title }}</td>
+          <td>{{ row.external_rating }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Actividad por usuario</h2>
+  <table class="admin-table">
+    <thead><tr><th>Usuario</th><th>Entradas</th><th>Favoritos</th><th>Nota media</th></tr></thead>
+    <tbody>
+      {% for row in activity %}
+        <tr>
+          <td>{{ row.user }} <span class="badge">{{ row.role }}</span></td>
+          <td>{{ row.entries }}</td>
+          <td>{{ row.favorites }}</td>
+          <td>{{ row.avg_rating if row.avg_rating is not none else "—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

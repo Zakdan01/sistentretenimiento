@@ -69,6 +69,7 @@ def test_register_creates_user_and_session(app, client):
 
     user = app.extensions["mongo_client"][DB_NAME].users.find_one({"email": "laura@example.com"})
     assert user["display_name"] == "Laura"
+    assert user["role"] == "user"
     assert user["password_hash"] != "secreto123"
 
     sid = client.get_cookie("sid").value

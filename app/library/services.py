@@ -3,7 +3,10 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from pymongo.database import Database
 
+from app.catalog.services import title_collection
+
 STATUSES = ("watching", "watched", "planned", "dropped")
+TITLE_TYPES = ("movie", "series", "anime")
 
 
 def parse_entry_form(form) -> tuple[dict | None, str | None]:
@@ -49,13 +52,20 @@ def parse_entry_form(form) -> tuple[dict | None, str | None]:
 
 
 def upsert_entry(
-    db: Database, user_id: ObjectId, title_id: ObjectId, data: dict
+    db: Database,
+    user_id: ObjectId,
+    title_id: ObjectId,
+    title_type: str,
+    data: dict,
 ) -> dict:
+    if title_type not in TITLE_TYPES:
+        raise ValueError(f"Tipo de título inválido: {title_type}")
+
     now = datetime.now(timezone.utc)
     db.library_entries.update_one(
         {"user_id": user_id, "title_id": title_id},
         {
-            "$set": {**data, "updated_at": now},
+            "$set": {**data, "title_type": title_type, "updated_at": now},
             "$setOnInsert": {
                 "user_id": user_id,
                 "title_id": title_id,
@@ -78,24 +88,35 @@ def get_entry(
 
 
 def list_entries(db: Database, user_id: ObjectId, status: str | None = None) -> list[dict]:
+    """Entradas del usuario con su ficha, resolviendo el tipo de cada título."""
     match = {"user_id": user_id}
     if status in STATUSES:
         match["status"] = status
 
-    pipeline = [
-        {"$match": match},
-        {"$sort": {"updated_at": -1}},
-        {
-            "$lookup": {
-                "from": "titles",
-                "localField": "title_id",
-                "foreignField": "_id",
-                "as": "title",
-            }
-        },
-        {"$unwind": "$title"},
-    ]
-    return list(db.library_entries.aggregate(pipeline))
+    entries = list(
+        db.library_entries.find(match).sort([("updated_at", -1)])
+    )
+
+    ids_by_type: dict[str, list[ObjectId]] = {}
+    for entry in entries:
+        title_type = entry.get("title_type")
+        if title_type in TITLE_TYPES:
+            ids_by_type.setdefault(title_type, []).append(entry["title_id"])
+
+    titles: dict[ObjectId, dict] = {}
+    for title_type, title_ids in ids_by_type.items():
+        collection = title_collection(db, title_type)
+        for document in collection.find({"_id": {"$in": title_ids}}):
+            titles[document["_id"]] = document
+
+    result = []
+    for entry in entries:
+        document = titles.get(entry["title_id"])
+        if document is None:
+            continue
+        entry["title"] = document
+        result.append(entry)
+    return result
 
 
 def count_by_status(db: Database, user_id: ObjectId) -> dict:

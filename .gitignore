@@ -4,5 +4,6 @@ __pycache__/
 .env
 .superpowers/
 .pytest_cache/
+mongodb/seed/.cache/
 instance/
 *.log

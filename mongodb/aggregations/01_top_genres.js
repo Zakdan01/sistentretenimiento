@@ -1,6 +1,8 @@
-// Géneros más presentes y valoración media de sus títulos.
+// Géneros más presentes y valoración media de sus títulos (5 colecciones).
 // Uso: mongosh "mongodb://localhost:27017/catalogo" --quiet --file mongodb/aggregations/01_top_genres.js
 const pipeline = [
+  { $unionWith: "series" },
+  { $unionWith: "animes" },
   { $unwind: "$genres" },
   {
     $group: {
@@ -20,4 +22,4 @@ const pipeline = [
   },
 ];
 
-print(JSON.stringify(db.titles.aggregate(pipeline).toArray()));
+print(JSON.stringify(db.movies.aggregate(pipeline).toArray()));

@@ -1,5 +1,6 @@
 from flask import Flask, g, jsonify
 
+from app.admin.routes import bp as admin_bp
 from app.auth.current_user import load_logged_in_user
 from app.auth.profile import bp as profile_bp
 from app.auth.routes import bp as auth_bp
@@ -19,6 +20,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     app.register_blueprint(profile_bp)
     app.register_blueprint(catalog_bp)
     app.register_blueprint(library_bp)
+    app.register_blueprint(admin_bp)
     app.before_request(load_logged_in_user)
 
     @app.context_processor
