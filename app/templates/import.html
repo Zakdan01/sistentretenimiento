@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Importar títulos{% endblock %}
+{% block content %}
+<h1>Importar desde una API externa</h1>
+<p class="muted">
+  Buscá en Jikan (anime) o TMDB (películas y series). Al importar se guarda una
+  copia local en MongoDB y la ficha queda disponible en el catálogo.
+</p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form class="filters" method="get" action="/import">
+  <input type="search" name="q" value="{{ query }}" placeholder="Título a buscar" required>
+  <select name="source">
+    <option value="jikan" {% if source == "jikan" %}selected{% endif %}>Jikan (anime)</option>
+    <option value="tmdb" {% if source == "tmdb" %}selected{% endif %}>TMDB (películas y series)</option>
+  </select>
+  <button type="submit">Buscar</button>
+</form>
+
+{% if results %}
+  <div class="grid">
+    {% for result in results %}
+      <article class="title-card">
+        <div class="poster">
+          {% if result.poster_url %}
+            <img src="{{ result.poster_url }}" alt="Póster de {{ result.title }}" loading="lazy">
+          {% else %}
+            <span>{{ result.title[0] }}</span>
+          {% endif %}
+        </div>
+        <h3>{{ result.title }}</h3>
+        <p class="muted">{{ result.year or "s/f" }} · {{ result.type }}</p>
+        <form method="post" action="/import">
+          <input type="hidden" name="source" value="{{ result.external.source }}">
+          <input type="hidden" name="external_id" value="{{ result.external.id }}">
+          <input type="hidden" name="media_type" value="{{ result.media_type | default('movie') }}">
+          <button type="submit">Importar</button>
+        </form>
+      </article>
+    {% endfor %}
+  </div>
+{% elif query %}
+  <p class="empty">La búsqueda no devolvió resultados.</p>
+{% endif %}
+{% endblock %}

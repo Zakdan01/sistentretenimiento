@@ -74,7 +74,7 @@ def register():
 
 @bp.get("/login")
 def login_form():
-    return render_template("auth/login.html")
+    return render_template("auth/login.html", next=request.args.get("next", ""))
 
 
 @bp.post("/login")
@@ -88,9 +88,10 @@ def login():
             "auth/login.html",
             error="Email o contraseña incorrectos.",
             form=request.form,
+            next=request.args.get("next", ""),
         )
 
-    return _start_session(redirect("/"), user["_id"])
+    return _start_session(redirect(request.args.get("next") or "/"), user["_id"])
 
 
 @bp.post("/logout")

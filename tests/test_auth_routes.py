@@ -109,3 +109,16 @@ def test_logout_destroys_session(client):
     redis_client = Redis.from_url(REDIS_URL, decode_responses=True, protocol=2)
     assert redis_client.exists(f"sess:{sid}") == 0
     assert client.get_cookie("sid") is None
+
+
+def test_login_redirects_to_next_parameter(client):
+    register(client)
+    client.post("/auth/logout")
+
+    response = client.post(
+        "/auth/login?next=/import",
+        data={"email": "laura@example.com", "password": "secreto123"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/import"
