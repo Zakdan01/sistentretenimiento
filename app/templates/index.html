@@ -10,6 +10,20 @@
   </form>
 </section>
 
+{% if trending %}
+<section>
+  <div class="section-head">
+    <h2>Tendencias</h2>
+    <span class="muted">según las visitas registradas en Redis</span>
+  </div>
+  <div class="grid">
+    {% for title in trending %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <section>
   <div class="section-head">
     <h2>Mejor valoradas</h2>

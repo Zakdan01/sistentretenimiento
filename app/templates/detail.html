@@ -39,6 +39,10 @@
         <strong>{{ title.external_rating if title.external_rating else "—" }}</strong>
         <span>valoración de la fuente</span>
       </div>
+      <div>
+        <strong>♥ {{ likes | default(0) }}</strong>
+        <span>favoritos en la biblioteca</span>
+      </div>
     </div>
 
     {% if entry %}

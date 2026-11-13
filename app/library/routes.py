@@ -1,8 +1,9 @@
 from flask import Blueprint, abort, g, redirect, render_template, request, url_for
 
 from app.auth.current_user import login_required
+from app.cache import invalidate_titles, sync_likes
 from app.catalog.services import average_rating, get_title
-from app.extensions import get_mongo_db
+from app.extensions import get_mongo_db, get_redis_client
 from app.library.services import (
     STATUSES,
     count_by_status,
@@ -14,6 +15,13 @@ from app.library.services import (
 )
 
 bp = Blueprint("library", __name__, url_prefix="/library")
+
+
+def _sync_title_likes(db, title_id) -> int:
+    total = db.library_entries.count_documents(
+        {"title_id": title_id, "favorite": True}
+    )
+    return sync_likes(get_redis_client(), title_id, total)
 
 
 @bp.get("")
@@ -57,6 +65,8 @@ def save(title_id):
         )
 
     upsert_entry(db, g.user["_id"], title["_id"], data)
+    _sync_title_likes(db, title["_id"])
+    invalidate_titles(get_redis_client())
     return redirect(url_for("catalog.detail", title_id=title["_id"], _anchor="library"))
 
 
@@ -69,4 +79,6 @@ def delete(title_id):
         abort(404)
 
     delete_entry(db, g.user["_id"], title["_id"])
+    _sync_title_likes(db, title["_id"])
+    invalidate_titles(get_redis_client())
     return redirect(url_for("library.index"))
