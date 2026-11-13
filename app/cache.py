@@ -14,12 +14,14 @@ from hashlib import sha1
 
 SEARCH_PREFIX = "cache:search:"
 TITLE_PREFIX = "cache:title:"
+API_PREFIX = "cache:api:"
 VIEWS_PREFIX = "cnt:views:"
 LIKES_PREFIX = "cnt:likes:"
 POPULAR_KEY = "rank:popular"
 
 SEARCH_TTL_SECONDS = 60
 TITLE_TTL_SECONDS = 300
+EXTERNAL_TTL_SECONDS = 600
 
 
 def search_cache_key(params: Mapping, namespace: str = "") -> str:
@@ -35,6 +37,12 @@ def search_cache_key(params: Mapping, namespace: str = "") -> str:
 def title_cache_key(title_id, namespace: str = "") -> str:
     prefix = f"{namespace}:" if namespace else ""
     return f"{TITLE_PREFIX}{prefix}{title_id}"
+
+
+def api_cache_key(source: str, query: str, namespace: str = "") -> str:
+    digest = sha1(f"{source}:{query.strip().lower()}".encode("utf-8")).hexdigest()[:16]
+    prefix = f"{namespace}:" if namespace else ""
+    return f"{API_PREFIX}{prefix}{digest}"
 
 
 def get_json(redis_client, key: str):
@@ -61,6 +69,10 @@ def invalidate_titles(redis_client) -> int:
     return _delete_by_prefix(redis_client, TITLE_PREFIX)
 
 
+def invalidate_api(redis_client) -> int:
+    return _delete_by_prefix(redis_client, API_PREFIX)
+
+
 def register_view(redis_client, title_id) -> int:
     """Suma una visita y actualiza el ranking de popularidad."""
     views = redis_client.incr(f"{VIEWS_PREFIX}{title_id}")
@@ -83,3 +95,7 @@ def like_count(redis_client, title_id) -> int:
 
 def popular_title_ids(redis_client, limit: int = 8) -> list[str]:
     return redis_client.zrevrange(POPULAR_KEY, 0, limit - 1)
+
+
+def popular_with_scores(redis_client, limit: int = 8) -> list[tuple[str, float]]:
+    return redis_client.zrevrange(POPULAR_KEY, 0, limit - 1, withscores=True)

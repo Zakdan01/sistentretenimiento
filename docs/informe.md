@@ -522,7 +522,7 @@ caso de estudio 2/
 │  └─ queries/             # explain y dimensionamiento
 ├─ redis/
 │  └─ README.md            # mapa de claves y operación
-├─ tests/                  # 70 pruebas automatizadas
+├─ tests/                  # 75 pruebas automatizadas
 └─ docs/
    └─ informe.md           # este documento
 ```
@@ -536,6 +536,7 @@ caso de estudio 2/
 | GET | `/titles/<id>` | ficha con elenco, temporadas y promedio | no |
 | GET | `/api/search` | búsqueda en JSON | no |
 | GET | `/api/titles/<id>` | ficha en JSON con promedio | no |
+| GET | `/api/popular` | ranking de visitas desde Redis | no |
 | GET | `/import` | buscador de APIs externas | sí |
 | POST | `/import` | importa y redirige a la ficha | sí |
 | GET | `/auth/register` | formulario de alta | no |
@@ -544,6 +545,7 @@ caso de estudio 2/
 | POST | `/auth/login` | valida y crea sesión | no |
 | POST | `/auth/logout` | destruye la sesión | no |
 | GET | `/library` | biblioteca personal filtrable | sí |
+| GET | `/profile` | perfil con estadísticas personales | sí |
 | POST | `/library/<id>` | alta o edición de entrada | sí |
 | POST | `/library/<id>/delete` | quita la entrada | sí |
 | GET | `/health` | chequeo de salud | no |
@@ -580,6 +582,7 @@ El detalle del mapa de claves está en `redis/README.md`. Resumen:
 - `sess:<sid>` — hash con `user_id`, TTL de 7 días.
 - `cache:search:<db>:<hash>` — resultados serializados, TTL 60 s.
 - `cache:title:<db>:<id>` — ficha + promedio, TTL 300 s.
+- `cache:api:<db>:<hash>` — resultados de búsqueda externa, TTL 600 s.
 - `cnt:views:<id>` y `cnt:likes:<id>` — contadores enteros.
 - `rank:popular` — sorted set de visitas por título.
 
@@ -679,10 +682,15 @@ como método reproducible, no como conclusión sobre un volumen grande.
   muestra “Tendencias” a partir de ese sorted set.
 - `cnt:likes` se recalcula desde MongoDB en cada cambio de entrada, lo que
   evita desviaciones por escrituras concurrentes o borrados.
+- Las búsquedas externas (Jikan/TMDB) se cachean 10 minutos (`cache:api`) y se
+  invalidan al importar, para no repetir llamadas a la API.
+- `/api/popular` expone el ranking con el número de visitas; `/profile` resume
+  la biblioteca del usuario con una agregación por estado, favoritos y nota
+  media personal.
 
 ### 7.5 Pruebas y calidad
 
-La suite completa pasa con **70 pruebas**. Los fallos corregidos durante el
+La suite completa pasa con **75 pruebas**. Los fallos corregidos durante el
 desarrollo quedaron cubiertos por pruebas de regresión:
 
 - el índice de texto no aplicaba stemming en español hasta fijar

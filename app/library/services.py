@@ -107,3 +107,25 @@ def count_by_status(db: Database, user_id: ObjectId) -> dict:
     for row in db.library_entries.aggregate(pipeline):
         counts[row["_id"]] = row["total"]
     return counts
+
+
+def profile_stats(db: Database, user_id: ObjectId) -> dict:
+    counts = count_by_status(db, user_id)
+    favorites = db.library_entries.count_documents(
+        {"user_id": user_id, "favorite": True}
+    )
+    average = list(
+        db.library_entries.aggregate(
+            [
+                {"$match": {"user_id": user_id, "rating": {"$ne": None}}},
+                {"$group": {"_id": None, "average": {"$avg": "$rating"}}},
+            ]
+        )
+    )
+
+    return {
+        "counts": counts,
+        "total": sum(counts.values()),
+        "favorites": favorites,
+        "avg_rating": round(average[0]["average"], 1) if average else None,
+    }

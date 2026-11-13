@@ -16,13 +16,17 @@ from flask import (
 
 from app.auth.current_user import login_required
 from app.cache import (
+    EXTERNAL_TTL_SECONDS,
     SEARCH_TTL_SECONDS,
     TITLE_TTL_SECONDS,
+    api_cache_key,
     get_json,
+    invalidate_api,
     invalidate_search,
     invalidate_titles,
     like_count,
     popular_title_ids,
+    popular_with_scores,
     register_view,
     search_cache_key,
     set_json,
@@ -181,7 +185,40 @@ def api_title(title_id):
     return jsonify(payload)
 
 
-def _search_external(query: str, source: str) -> list[dict]:
+@bp.get("/api/popular")
+def api_popular():
+    """Ranking de títulos más vistos, alimentado por `rank:popular` en Redis."""
+    db = get_mongo_db()
+    entries = popular_with_scores(get_redis_client())
+
+    object_ids = []
+    scores = {}
+    for raw_id, score in entries:
+        try:
+            object_id = ObjectId(raw_id)
+        except (InvalidId, TypeError):
+            continue
+        object_ids.append(object_id)
+        scores[object_id] = int(score)
+
+    documents = {
+        document["_id"]: document
+        for document in db.titles.find({"_id": {"$in": object_ids}})
+    }
+
+    results = []
+    for object_id in object_ids:
+        document = documents.get(object_id)
+        if document is None:
+            continue
+        payload = serialize_title(document)
+        payload["views"] = scores[object_id]
+        results.append(payload)
+
+    return jsonify(results=results)
+
+
+def _search_external_uncached(query: str, source: str) -> list[dict]:
     """Busca en la API externa elegida. El resultado no se guarda todavía."""
     if source == "tmdb":
         return search_tmdb(
@@ -190,6 +227,19 @@ def _search_external(query: str, source: str) -> list[dict]:
             base_url=current_app.config["TMDB_BASE_URL"],
         )
     return search_jikan(query, base_url=current_app.config["JIKAN_BASE_URL"])
+
+
+def _search_external(query: str, source: str) -> list[dict]:
+    """Cache-aside de búsquedas externas para no repetir llamadas a la API."""
+    redis_client = get_redis_client()
+    key = api_cache_key(source, query, namespace=_namespace())
+    cached = get_json(redis_client, key)
+    if cached is not None:
+        return cached
+
+    results = _search_external_uncached(query, source)
+    set_json(redis_client, key, results, EXTERNAL_TTL_SECONDS)
+    return results
 
 
 def _fetch_external(source: str, external_id: str, media_type: str) -> dict:
@@ -253,5 +303,6 @@ def import_create():
     redis_client = get_redis_client()
     invalidate_titles(redis_client)
     invalidate_search(redis_client)
+    invalidate_api(redis_client)
 
     return redirect(url_for("catalog.detail", title_id=document["_id"]))

@@ -129,3 +129,39 @@ def test_favorite_syncs_likes_counter(client, redis_client, dark_id):
 
     client.post(f"/library/{dark_id}", data={"status": "watched"})
     assert like_count(redis_client, dark_id) == 0
+
+
+def test_external_search_is_cached(client, redis_client, monkeypatch):
+    calls = {"total": 0}
+
+    def fake_search(query, source):
+        calls["total"] += 1
+        return [
+            {
+                "external": {"source": "jikan", "id": 16498},
+                "title": "Shingeki no Kyojin",
+                "year": 2013,
+                "type": "anime",
+                "poster_url": None,
+            }
+        ]
+
+    monkeypatch.setattr("app.catalog.routes._search_external_uncached", fake_search)
+    login(client)
+
+    client.get("/import?q=attack&source=jikan")
+    client.get("/import?q=attack&source=jikan")
+
+    assert calls["total"] == 1
+    keys = list(redis_client.scan_iter(match="cache:api:*"))
+    assert len(keys) == 1
+
+
+def test_api_popular_lists_viewed_titles(client, dark_id):
+    client.get(f"/titles/{dark_id}")
+    client.get(f"/titles/{dark_id}")
+
+    payload = client.get("/api/popular").get_json()
+
+    assert payload["results"][0]["title"] == "Dark"
+    assert payload["results"][0]["views"] == 2

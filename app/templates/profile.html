@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Mi perfil{% endblock %}
+{% block content %}
+{% set status_labels = {"watching": "Viendo", "watched": "Vistas", "planned": "Pendientes", "dropped": "Abandonadas"} %}
+<section class="card profile">
+  <h1>{{ current_user.display_name }}</h1>
+  <p class="muted">{{ current_user.email }} · miembro desde {{ current_user.created_at.strftime("%Y-%m-%d") }}</p>
+
+  <div class="stats">
+    <div class="stat">
+      <strong>{{ stats.total }}</strong>
+      <span>títulos en total</span>
+    </div>
+    <div class="stat">
+      <strong>{{ stats.favorites }}</strong>
+      <span>favoritos</span>
+    </div>
+    <div class="stat">
+      <strong>{{ stats.avg_rating if stats.avg_rating is not none else "—" }}</strong>
+      <span>nota media</span>
+    </div>
+  </div>
+
+  <h2>Por estado</h2>
+  <div class="stats">
+    {% for status, label in status_labels.items() %}
+      <div class="stat">
+        <strong>{{ stats.counts[status] }}</strong>
+        <span>{{ label }}</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <p><a href="/library">Ver mi biblioteca</a></p>
+</section>
+{% endblock %}

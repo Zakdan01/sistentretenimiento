@@ -16,6 +16,7 @@ La implementación vive en `app/auth/session.py` y `app/cache.py`.
 | `sess:<sid>` | hash | `user_id` de la sesión | 7 días (`SESSION_TTL_SECONDS`) |
 | `cache:search:<db>:<hash>` | string JSON | `total`, `page`, `results` de una búsqueda | 60 s |
 | `cache:title:<db>:<id>` | string JSON | ficha serializada + promedio de notas | 300 s |
+| `cache:api:<db>:<hash>` | string JSON | resultados de una búsqueda externa (Jikan/TMDB) | 600 s |
 | `cnt:views:<id>` | string entero | visitas acumuladas a la ficha | sin TTL |
 | `cnt:likes:<id>` | string entero | favoritos actuales del título | sin TTL |
 | `rank:popular` | sorted set | título → visitas | sin TTL |

@@ -354,3 +354,25 @@ label.checkbox input { width: auto; margin: 0; }
 .delete-form { margin-top: 0.8rem; }
 button.link.danger { color: #a11c1c; }
 button.link.danger:hover { color: #6d0f0f; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0 1.6rem;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: #fff;
+}
+.stat strong {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+.stat span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
