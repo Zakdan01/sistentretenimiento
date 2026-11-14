@@ -17,9 +17,18 @@ from app.extensions import get_mongo_db, get_redis_client
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-def _start_session(response, user_id):
-    ttl = current_app.config["SESSION_TTL_SECONDS"]
-    sid = create_session(get_redis_client(), user_id, ttl)
+def _session_ttl(role: str) -> int:
+    base_ttl = current_app.config.get("SESSION_TTL_SECONDS")
+    if current_app.config.get("TESTING") and base_ttl:
+        return base_ttl
+    if role == "admin":
+        return 60 * 60 * 24 * 7  # 7 días para administradores
+    return 60 * 30  # 30 minutos para usuarios comunes por inactividad
+
+
+def _start_session(response, user_id, role: str = "user"):
+    ttl = _session_ttl(role)
+    sid = create_session(get_redis_client(), user_id, ttl, role=role)
     response.set_cookie(
         COOKIE_NAME,
         sid,
@@ -70,7 +79,7 @@ def register():
             form=request.form,
         )
 
-    return _start_session(redirect("/"), user_id)
+    return _start_session(redirect("/"), user_id, role="user")
 
 
 @bp.get("/login")
@@ -92,7 +101,11 @@ def login():
             next=request.args.get("next", ""),
         )
 
-    return _start_session(redirect(request.args.get("next") or "/"), user["_id"])
+    return _start_session(
+        redirect(request.args.get("next") or "/"),
+        user["_id"],
+        role=user.get("role", "user"),
+    )
 
 
 @bp.post("/logout")

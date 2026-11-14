@@ -1,36 +1,195 @@
 {% extends "base.html" %}
-{% block title %}Mi perfil{% endblock %}
+{% block title %}Mi Perfil — {{ current_user.display_name }}{% endblock %}
 {% block content %}
 {% set status_labels = {"watching": "Viendo", "watched": "Vistas", "planned": "Pendientes", "dropped": "Abandonadas"} %}
-<section class="card profile">
-  <h1>{{ current_user.display_name }}</h1>
-  <p class="muted">{{ current_user.email }} · miembro desde {{ current_user.created_at.strftime("%Y-%m-%d") }}</p>
+{% set status_icons = {"watching": "👁️", "watched": "✅", "planned": "📌", "dropped": "❌"} %}
 
-  <div class="stats">
-    <div class="stat">
-      <strong>{{ stats.total }}</strong>
-      <span>títulos en total</span>
+<div class="profile-container">
+  <!-- Cabecera de Perfil -->
+  <div class="profile-hero">
+    <div class="profile-avatar">
+      <span>{{ current_user.display_name[0] | upper }}</span>
     </div>
-    <div class="stat">
-      <strong>{{ stats.favorites }}</strong>
-      <span>favoritos</span>
-    </div>
-    <div class="stat">
-      <strong>{{ stats.avg_rating if stats.avg_rating is not none else "—" }}</strong>
-      <span>nota media</span>
-    </div>
-  </div>
-
-  <h2>Por estado</h2>
-  <div class="stats">
-    {% for status, label in status_labels.items() %}
-      <div class="stat">
-        <strong>{{ stats.counts[status] }}</strong>
-        <span>{{ label }}</span>
+    <div class="profile-info">
+      <div class="profile-title-row">
+        <h1>{{ current_user.display_name }}</h1>
+        <span class="role-pill {{ current_user.role }}">
+          {{ "Administrador" if current_user.role == "admin" else "Usuario" }}
+        </span>
       </div>
-    {% endfor %}
+      <p class="profile-meta">
+        ✉️ {{ current_user.email }} · 📅 Miembro desde {{ current_user.created_at.strftime("%d/%m/%Y") }}
+      </p>
+    </div>
   </div>
 
-  <p><a href="/library">Ver mi biblioteca</a></p>
-</section>
+  <!-- Métricas Resumen -->
+  <div class="dashboard-stats">
+    <div class="dash-card">
+      <span class="dash-icon">📚</span>
+      <div class="dash-data">
+        <strong>{{ stats.total }}</strong>
+        <span>Títulos en biblioteca</span>
+      </div>
+    </div>
+
+    <div class="dash-card">
+      <span class="dash-icon">❤️</span>
+      <div class="dash-data">
+        <strong>{{ stats.favorites }}</strong>
+        <span>Marcados como favoritos</span>
+      </div>
+    </div>
+
+    <div class="dash-card">
+      <span class="dash-icon">★</span>
+      <div class="dash-data">
+        <strong class="star-accent">{{ stats.avg_rating if stats.avg_rating is not none else "—" }}</strong>
+        <span>Calificación promedio</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN DESTACADA: MIS FAVORITOS POR CATEGORÍA -->
+  <section class="favorites-showcase">
+    <div class="section-head">
+      <div class="head-title">
+        <h2>Mis Favoritos Destacados</h2>
+        <span class="redis-badge">❤️ Tu mejor selección</span>
+      </div>
+    </div>
+
+    <div class="favorites-grid">
+      <!-- 1. Película Favorita -->
+      <div class="favorite-showcase-card">
+        <div class="showcase-header">
+          <span class="cat-pill movie">🎬 Película Favorita</span>
+        </div>
+        {% if top_favorites.movie %}
+          {% set item = top_favorites.movie %}
+          <div class="showcase-content">
+            <div class="showcase-poster">
+              {% if item.title.poster_url %}
+                <img src="{{ item.title.poster_url }}" alt="{{ item.title.title }}">
+              {% else %}
+                <span>{{ item.title.title[0] }}</span>
+              {% endif %}
+            </div>
+            <div class="showcase-details">
+              <h3><a href="/titles/{{ item.title._id }}">{{ item.title.title }}</a></h3>
+              <p class="muted">{{ item.title.year or "s/f" }} · {{ item.title.genres[:2] | join(", ") if item.title.genres else "General" }}</p>
+              {% if item.rating %}
+                <div class="user-score-badge">Mi nota: <strong>★ {{ item.rating }}/10</strong></div>
+              {% endif %}
+              {% if item.notes %}
+                <p class="showcase-note">"{{ item.notes }}"</p>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="showcase-empty">
+            <p class="muted">Aún no marcaste una película como favorita.</p>
+            <a href="/search?type=movie" class="btn-more">Explorar películas →</a>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- 2. Serie Favorita -->
+      <div class="favorite-showcase-card">
+        <div class="showcase-header">
+          <span class="cat-pill series">📺 Serie Favorita</span>
+        </div>
+        {% if top_favorites.series %}
+          {% set item = top_favorites.series %}
+          <div class="showcase-content">
+            <div class="showcase-poster">
+              {% if item.title.poster_url %}
+                <img src="{{ item.title.poster_url }}" alt="{{ item.title.title }}">
+              {% else %}
+                <span>{{ item.title.title[0] }}</span>
+              {% endif %}
+            </div>
+            <div class="showcase-details">
+              <h3><a href="/titles/{{ item.title._id }}">{{ item.title.title }}</a></h3>
+              <p class="muted">{{ item.title.year or "s/f" }} · {{ item.title.genres[:2] | join(", ") if item.title.genres else "General" }}</p>
+              {% if item.progress %}
+                <div class="progress-pill">Avance: T{{ item.progress.season }} · E{{ item.progress.episode }}</div>
+              {% endif %}
+              {% if item.rating %}
+                <div class="user-score-badge">Mi nota: <strong>★ {{ item.rating }}/10</strong></div>
+              {% endif %}
+              {% if item.notes %}
+                <p class="showcase-note">"{{ item.notes }}"</p>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="showcase-empty">
+            <p class="muted">Aún no marcaste una serie como favorita.</p>
+            <a href="/search?type=series" class="btn-more">Explorar series →</a>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- 3. Anime Favorito -->
+      <div class="favorite-showcase-card">
+        <div class="showcase-header">
+          <span class="cat-pill anime">⛩️ Anime Favorito</span>
+        </div>
+        {% if top_favorites.anime %}
+          {% set item = top_favorites.anime %}
+          <div class="showcase-content">
+            <div class="showcase-poster">
+              {% if item.title.poster_url %}
+                <img src="{{ item.title.poster_url }}" alt="{{ item.title.title }}">
+              {% else %}
+                <span>{{ item.title.title[0] }}</span>
+              {% endif %}
+            </div>
+            <div class="showcase-details">
+              <h3><a href="/titles/{{ item.title._id }}">{{ item.title.title }}</a></h3>
+              <p class="muted">{{ item.title.year or "s/f" }} · {{ item.title.genres[:2] | join(", ") if item.title.genres else "General" }}</p>
+              {% if item.progress %}
+                <div class="progress-pill">Avance: T{{ item.progress.season }} · E{{ item.progress.episode }}</div>
+              {% endif %}
+              {% if item.rating %}
+                <div class="user-score-badge">Mi nota: <strong>★ {{ item.rating }}/10</strong></div>
+              {% endif %}
+              {% if item.notes %}
+                <p class="showcase-note">"{{ item.notes }}"</p>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="showcase-empty">
+            <p class="muted">Aún no marcaste un anime como favorito.</p>
+            <a href="/search?type=anime" class="btn-more">Explorar animes →</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Desglose por Estado -->
+  <section class="status-breakdown">
+    <div class="section-head">
+      <div class="head-title">
+        <h2>Distribución de mi Biblioteca</h2>
+      </div>
+      <a href="/library" class="btn-more">Ir a mi biblioteca →</a>
+    </div>
+
+    <div class="status-grid">
+      {% for status, label in status_labels.items() %}
+        <a href="/library?status={{ status }}" class="status-stat-card {{ status }}">
+          <div class="status-stat-top">
+            <span class="status-stat-icon">{{ status_icons.get(status) }}</span>
+            <span class="status-stat-label">{{ label }}</span>
+          </div>
+          <strong class="status-stat-number">{{ stats.counts[status] }}</strong>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+</div>
 {% endblock %}

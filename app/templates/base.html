@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Biblioteca Virtual{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -36,6 +36,9 @@
           <a href="/auth/login" class="nav-item">Ingresar</a>
           <a href="/auth/register" class="btn-register">Crear cuenta</a>
         {% endif %}
+        <span class="online-pill" title="Usuarios navegando en tiempo real (Redis ZSET)">
+          <span class="pulse-dot"></span> {{ online_users_count }} en línea
+        </span>
       </nav>
     </div>
   </header>
@@ -46,7 +49,8 @@
 
   <footer class="site-footer">
     <div class="footer-inner">
-      <p>Biblioteca Virtual NoSQL — <strong>MongoDB</strong> (Fuente de verdad) + <strong>Redis</strong> (Sesión, Cache y Rankings) + <strong>Flask</strong></p>
+      <p>Biblioteca Virtual NoSQL — <strong>MongoDB</strong> (Fuente de verdad) + <strong>Redis</strong> (Sesiones dinámicas, Cache-aside, Rate-limiting y ZSETs) + <strong>Flask</strong></p>
+      <small class="muted">🟢 Conectividad en vivo: <strong>{{ online_users_count }} usuario(s) activo(s)</strong> gestionados con Redis.</small>
     </div>
   </footer>
 </body>

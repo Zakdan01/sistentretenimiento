@@ -9,6 +9,7 @@ Mapa de claves:
 """
 
 import json
+import time
 from collections.abc import Mapping
 from hashlib import sha1
 
@@ -19,10 +20,14 @@ VIEWS_PREFIX = "cnt:views:"
 LIKES_PREFIX = "cnt:likes:"
 RECENT_PREFIX = "recent:views:"
 POPULAR_KEY = "rank:popular"
+FAVORITES_KEY = "rank:favorites"
+ACTIVE_USERS_KEY = "online:active"
+RATE_LIMIT_PREFIX = "ratelimit:"
 
 SEARCH_TTL_SECONDS = 60
 TITLE_TTL_SECONDS = 300
 EXTERNAL_TTL_SECONDS = 600
+ACTIVE_WINDOW_SECONDS = 300  # 5 minutos para considerar activo a un usuario
 
 
 def search_cache_key(params: Mapping, namespace: str = "") -> str:
@@ -122,3 +127,38 @@ def get_recent_views(redis_client, user_id, limit: int = 6) -> list[str]:
         item.decode("utf-8") if isinstance(item, bytes) else str(item)
         for item in raw_list
     ]
+
+
+def record_active_user(redis_client, identifier: str) -> None:
+    """Registra un usuario activo en el ZSET con su timestamp actual."""
+    now = time.time()
+    redis_client.zadd(ACTIVE_USERS_KEY, {str(identifier): now})
+    # Elimina entradas con más de ACTIVE_WINDOW_SECONDS de antigüedad
+    redis_client.zremrangebyscore(ACTIVE_USERS_KEY, 0, now - ACTIVE_WINDOW_SECONDS)
+
+
+def count_active_users(redis_client) -> int:
+    """Retorna la cantidad de usuarios únicos activos en los últimos minutos."""
+    now = time.time()
+    redis_client.zremrangebyscore(ACTIVE_USERS_KEY, 0, now - ACTIVE_WINDOW_SECONDS)
+    count = redis_client.zcard(ACTIVE_USERS_KEY)
+    return max(1, count)
+
+
+def sync_favorites_rank(redis_client, title_id, total: int) -> None:
+    """Mantiene el ranking de títulos con más favoritos de la comunidad (ZSET)."""
+    redis_client.zadd(FAVORITES_KEY, {str(title_id): total})
+
+
+def popular_favorites_ids(redis_client, limit: int = 8) -> list[str]:
+    """Obtiene los títulos con mayor cantidad de favoritos desde Redis (ZSET)."""
+    return redis_client.zrevrange(FAVORITES_KEY, 0, limit - 1)
+
+
+def is_rate_limited(redis_client, identifier: str, limit: int = 30, window: int = 60) -> bool:
+    """Control de concurrencia y protección anti-spam con clave efímera (STRING + INCR + EXPIRE)."""
+    key = f"{RATE_LIMIT_PREFIX}{identifier}"
+    current = redis_client.incr(key)
+    if current == 1:
+        redis_client.expire(key, window)
+    return current > limit

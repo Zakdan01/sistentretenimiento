@@ -1,56 +1,132 @@
 {% extends "base.html" %}
-{% block title %}Buscar{% endblock %}
+{% block title %}Explorar Catálogo — Películas, Series y Anime{% endblock %}
 {% block content %}
-<h1>Buscar en el catálogo</h1>
+{% set type_labels = {"movie": "Película", "series": "Serie", "anime": "Anime"} %}
 
-<form class="filters" method="get" action="/search">
-  <input type="search" name="q" value="{{ filters.q }}" placeholder="Título, sinopsis o género">
+<div class="search-page-header">
+  <div>
+    <h1>Explorar Catálogo</h1>
+    <p class="muted">Descubre entre 1,500 películas, series y anime indexados en alta velocidad.</p>
+  </div>
+  <div class="results-badge">
+    <span>{{ total }} título{% if total != 1 %}s{% endif %} encontrado{% if total != 1 %}s{% endif %}</span>
+  </div>
+</div>
 
-  <select name="type">
-    <option value="">Todos los tipos</option>
-    <option value="movie" {% if filters.type == "movie" %}selected{% endif %}>Películas</option>
-    <option value="series" {% if filters.type == "series" %}selected{% endif %}>Series</option>
-    <option value="anime" {% if filters.type == "anime" %}selected{% endif %}>Anime</option>
-  </select>
+{% if error %}
+  <div class="alert-error">{{ error }}</div>
+{% endif %}
 
-  <select name="genre">
-    <option value="">Todos los géneros</option>
-    {% for genre in genres %}
-      <option value="{{ genre }}" {% if filters.genre == genre %}selected{% endif %}>{{ genre }}</option>
-    {% endfor %}
-  </select>
+<!-- Formulario de Búsqueda y Filtros Avanzados -->
+<form class="search-filters-panel" method="get" action="/search">
+  <div class="main-filter-row">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="search" name="q" value="{{ filters.q }}" placeholder="Buscar por título, sinopsis o palabras clave...">
+    </div>
 
-  <input type="number" name="year_from" value="{{ filters.year_from or '' }}" placeholder="Año desde" min="1900" max="2100">
-  <input type="number" name="year_to" value="{{ filters.year_to or '' }}" placeholder="Año hasta" min="1900" max="2100">
-  <input type="number" name="min_rating" value="{{ filters.min_rating or '' }}" placeholder="Nota mínima" min="0" max="10" step="0.1">
+    <div class="select-wrapper">
+      <select name="type">
+        <option value="">🎬 Todos los tipos</option>
+        <option value="movie" {% if filters.type == "movie" %}selected{% endif %}>Películas</option>
+        <option value="series" {% if filters.type == "series" %}selected{% endif %}>Series</option>
+        <option value="anime" {% if filters.type == "anime" %}selected{% endif %}>Anime</option>
+      </select>
+    </div>
 
-  <select name="sort">
-    <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>Mejor valoradas</option>
-    <option value="year" {% if filters.sort == "year" %}selected{% endif %}>Más recientes</option>
-    <option value="title" {% if filters.sort == "title" %}selected{% endif %}>Título A–Z</option>
-    <option value="relevance" {% if filters.sort == "relevance" %}selected{% endif %}>Relevancia</option>
-  </select>
+    <div class="select-wrapper">
+      <select name="sort">
+        <option value="rating" {% if filters.sort == "rating" %}selected{% endif %}>★ Mejor valoradas</option>
+        <option value="year" {% if filters.sort == "year" %}selected{% endif %}>📅 Más recientes</option>
+        <option value="title" {% if filters.sort == "title" %}selected{% endif %}>🔤 Título A–Z</option>
+        <option value="relevance" {% if filters.sort == "relevance" %}selected{% endif %}>⚡ Relevancia</option>
+      </select>
+    </div>
 
-  <button type="submit">Filtrar</button>
+    <button type="submit" class="btn-primary">
+      <span>Filtrar</span>
+    </button>
+  </div>
+
+  <!-- Desplegable elegante de Filtros Avanzados (con <details>) -->
+  <details class="advanced-filters" {% if filters.genre or filters.year_from or filters.year_to or filters.min_rating %}open{% endif %}>
+    <summary class="advanced-summary">
+      <span>⚙️ Más opciones de filtrado</span>
+      <span class="summary-hint">{% if filters.genre or filters.year_from or filters.year_to or filters.min_rating %}(Filtros activos){% else %}(Género, Años, Calificación){% endif %}</span>
+    </summary>
+
+    <div class="advanced-grid">
+      <div class="filter-field">
+        <label>Género</label>
+        <select name="genre">
+          <option value="">Todos los géneros</option>
+          {% for genre in genres %}
+            <option value="{{ genre }}" {% if filters.genre == genre %}selected{% endif %}>{{ genre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label>Año Desde</label>
+        <input type="number" name="year_from" value="{{ filters.year_from or '' }}" placeholder="Ej: 1990" min="1900" max="2100">
+      </div>
+
+      <div class="filter-field">
+        <label>Año Hasta</label>
+        <input type="number" name="year_to" value="{{ filters.year_to or '' }}" placeholder="Ej: 2026" min="1900" max="2100">
+      </div>
+
+      <div class="filter-field">
+        <label>Nota Mínima (IMDb)</label>
+        <input type="number" name="min_rating" value="{{ filters.min_rating or '' }}" placeholder="Ej: 7.5" min="0" max="10" step="0.1">
+      </div>
+
+      <div class="filter-actions">
+        <a href="/search" class="btn-reset">Limpiar filtros</a>
+      </div>
+    </div>
+  </details>
 </form>
 
-<p class="muted">{{ total }} resultado{% if total != 1 %}s{% endif %}</p>
-
+<!-- Resultados de Catálogo (Mismo tamaño que en la biblioteca) -->
 {% if titles %}
-  <div class="grid">
+  <div class="grid catalog-grid">
     {% for title in titles %}
       {% include "_card.html" %}
     {% endfor %}
   </div>
 {% else %}
-  <p class="empty">No encontramos títulos con esos filtros.</p>
+  <div class="empty-state">
+    <div class="empty-icon">🔍</div>
+    <h3>No se encontraron títulos</h3>
+    <p class="muted">Prueba ajustando los términos de búsqueda o eliminando los filtros activos.</p>
+    <a href="/search" class="btn-primary">Ver todo el catálogo</a>
+  </div>
 {% endif %}
 
-{% if previous_url or next_url %}
-  <nav class="pagination">
-    {% if previous_url %}<a href="{{ previous_url }}">← Anterior</a>{% endif %}
-    <span>Página {{ filters.page }} de {{ total_pages }}</span>
-    {% if next_url %}<a href="{{ next_url }}">Siguiente →</a>{% endif %}
+<!-- Paginación Moderna y Mejorada -->
+{% if total_pages > 1 %}
+  <nav class="pagination-bar">
+    {% if previous_url %}
+      <a href="{{ previous_url }}" class="page-btn prev">
+        <span>← Anterior</span>
+      </a>
+    {% else %}
+      <span class="page-btn disabled">← Anterior</span>
+    {% endif %}
+
+    <div class="page-indicator">
+      Página <strong>{{ filters.page }}</strong> de <strong>{{ total_pages }}</strong>
+      <span class="page-sub">({{ total }} títulos)</span>
+    </div>
+
+    {% if next_url %}
+      <a href="{{ next_url }}" class="page-btn next">
+        <span>Siguiente →</span>
+      </a>
+    {% else %}
+      <span class="page-btn disabled">Siguiente →</span>
+    {% endif %}
   </nav>
 {% endif %}
 {% endblock %}

@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, g, redirect, render_template, request, url_for
 
 from app.auth.current_user import login_required
-from app.cache import invalidate_titles, sync_likes
+from app.cache import invalidate_titles, sync_favorites_rank, sync_likes
 from app.catalog.services import average_rating, get_title
 from app.extensions import get_mongo_db, get_redis_client
 from app.library.services import (
@@ -21,7 +21,9 @@ def _sync_title_likes(db, title_id) -> int:
     total = db.library_entries.count_documents(
         {"title_id": title_id, "favorite": True}
     )
-    return sync_likes(get_redis_client(), title_id, total)
+    redis_client = get_redis_client()
+    sync_favorites_rank(redis_client, title_id, total)
+    return sync_likes(redis_client, title_id, total)
 
 
 @bp.get("")

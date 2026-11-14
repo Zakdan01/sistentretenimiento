@@ -42,6 +42,22 @@
 </section>
 {% endif %}
 
+{% if favorites_ranking %}
+<section class="home-section">
+  <div class="section-head">
+    <div class="head-title">
+      <h2>Favoritos de la comunidad</h2>
+      <span class="redis-badge">❤️ Ranking de likes en vivo (Redis ZSET)</span>
+    </div>
+  </div>
+  <div class="grid">
+    {% for title in favorites_ranking %}
+      {% include "_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <section class="home-section">
   <div class="section-head">
     <div class="head-title">

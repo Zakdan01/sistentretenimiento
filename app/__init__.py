@@ -25,7 +25,16 @@ def create_app(config_overrides: dict | None = None) -> Flask:
 
     @app.context_processor
     def inject_current_user():
-        return {"current_user": g.get("user")}
+        try:
+            from app.cache import count_active_users
+            from app.extensions import get_redis_client
+            active_count = count_active_users(get_redis_client())
+        except Exception:
+            active_count = 1
+        return {
+            "current_user": g.get("user"),
+            "online_users_count": active_count,
+        }
 
     @app.get("/health")
     def health():

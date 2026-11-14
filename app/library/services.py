@@ -150,3 +150,25 @@ def profile_stats(db: Database, user_id: ObjectId) -> dict:
         "favorites": favorites,
         "avg_rating": round(average[0]["average"], 1) if average else None,
     }
+
+
+def user_top_favorites(db: Database, user_id: ObjectId) -> dict:
+    """Devuelve la entrada y ficha del título favorito destacado por categoría (movie, series, anime)."""
+    top = {"movie": None, "series": None, "anime": None}
+    for title_type in TITLE_TYPES:
+        cursor = (
+            db.library_entries.find(
+                {"user_id": user_id, "title_type": title_type, "favorite": True}
+            )
+            .sort([("rating", -1), ("updated_at", -1)])
+            .limit(1)
+        )
+        entries = list(cursor)
+        if entries:
+            entry = entries[0]
+            col = title_collection(db, title_type)
+            doc = col.find_one({"_id": entry["title_id"]})
+            if doc:
+                entry["title"] = doc
+                top[title_type] = entry
+    return top

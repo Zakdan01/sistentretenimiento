@@ -26,7 +26,9 @@ from app.cache import (
     invalidate_api,
     invalidate_search,
     invalidate_titles,
+    is_rate_limited,
     like_count,
+    popular_favorites_ids,
     popular_title_ids,
     popular_with_scores,
     register_view,
@@ -64,6 +66,9 @@ def _namespace() -> str:
     return current_app.config["MONGO_DB"]
 
 
+CATALOG_PAGE_SIZE = 20
+
+
 def _search_payload(db, params) -> dict:
     """Cache-aside de búsquedas: Redis primero, Mongo si no hay entrada."""
     redis_client = get_redis_client()
@@ -73,7 +78,7 @@ def _search_payload(db, params) -> dict:
     if cached is not None:
         return cached
 
-    documents, total = search_titles(db, params)
+    documents, total = search_titles(db, params, page_size=CATALOG_PAGE_SIZE)
     payload = {
         "total": total,
         "page": parse_filters(params)["page"],
@@ -85,6 +90,24 @@ def _search_payload(db, params) -> dict:
 
 def _trending_titles(db) -> list[dict]:
     raw_ids = popular_title_ids(get_redis_client())
+    if not raw_ids:
+        return []
+
+    documents = titles_by_ids(db, raw_ids)
+    ordered = []
+    for raw_id in raw_ids:
+        try:
+            object_id = ObjectId(raw_id)
+        except (InvalidId, TypeError):
+            continue
+        document = documents.get(object_id)
+        if document is not None:
+            ordered.append(document)
+    return ordered
+
+
+def _top_favorites_titles(db) -> list[dict]:
+    raw_ids = popular_favorites_ids(get_redis_client())
     if not raw_ids:
         return []
 
@@ -123,6 +146,7 @@ def index():
         top_rated=top_rated_titles(db),
         recent=recent_titles(db),
         trending=_trending_titles(db),
+        favorites_ranking=_top_favorites_titles(db),
         recent_viewed=recent_viewed,
     )
 
@@ -130,9 +154,23 @@ def index():
 @bp.get("/search")
 def search():
     db = get_mongo_db()
+    # Rate Limiting con Redis para proteger el motor de búsqueda
+    if not current_app.config.get("TESTING"):
+        client_ip = request.remote_addr or "127.0.0.1"
+        if is_rate_limited(get_redis_client(), f"search:{client_ip}", limit=40, window=60):
+            return render_template(
+                "search.html",
+                titles=[],
+                total=0,
+                filters=parse_filters(request.args),
+                genres=list_genres(db),
+                total_pages=1,
+                error="⚡ Límite de búsquedas por minuto alcanzado (Protección anti-spam con Redis). Espera un minuto.",
+            ), 429
+
     payload = _search_payload(db, request.args)
     filters = parse_filters(request.args)
-    total_pages = max(1, ceil(payload["total"] / PAGE_SIZE))
+    total_pages = max(1, ceil(payload["total"] / CATALOG_PAGE_SIZE))
 
     def page_url(page: int) -> str:
         args = request.args.to_dict(flat=True)
